@@ -197,8 +197,10 @@ function App() {
     setOpenIds(remaining);
     if (id === activeId) {
       const nextId = remaining[remaining.length-1] || "";
+      pdfLoadSequenceRef.current++;
+      openingIdsRef.current.delete(id);
       setActiveId(nextId);
-      setPdf(null); setSelection(null); setPage(1);
+      setPdf(null); setPdfLoading(false); setSelection(null); setPage(1);
       if (!nextId) setRoute("library");
     }
   },[openIds,activeId,setRoute]);
@@ -274,6 +276,8 @@ function App() {
   // Render PDF pages on demand. Creating every full-resolution canvas at once can
   // exhaust browser memory and is the main cause of intermittent blank readers.
   // Page shells remain in the scroll flow; only visible/near-visible pages get canvases.
+  useEffect(() => () => { try { pdf?.destroy?.(); } catch {} },[pdf]);
+
   useEffect(() => {
     if (!pdf || !canvasHost.current) return;
     let cancelled = false;
@@ -403,7 +407,6 @@ function App() {
           if (!observation.isIntersecting) continue;
           const entry=entries[Number(observation.target.dataset.page)-1];
           if (entry) renderEntry(entry,currentGeneration);
-          intersectionObserver.unobserve(observation.target);
         }
       },{root,rootMargin:"1000px 0px",threshold:0});
       entries.forEach(entry=>intersectionObserver.observe(entry.shell));
