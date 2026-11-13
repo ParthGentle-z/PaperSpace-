@@ -426,10 +426,11 @@ function App() {
   const openAnnotation = useCallback((paperId, annotation, kind="highlight") => {
     if (!paperId || !annotation) return;
     pendingAnnotationRef.current = {
-      paperId, page:annotation.page,
+      paperId, page:annotation.page || annotation.anchor?.page || 1,
+      text:kind === "note" ? (annotation.anchor?.text || "") : (annotation.text || ""),
       rects:annotation.rects || annotation.anchor?.rects || [],
       normalized:annotation.normalized ?? annotation.anchor?.normalized ?? true,
-      id:kind === "highlight" ? annotation.id : (annotation.anchor?.highlightId || annotation.id)
+      id:kind === "highlight" ? annotation.id : (annotation.anchor?.highlightId || null)
     };
     setFocusedAnnotationId(kind === "highlight" ? annotation.id : (annotation.anchor?.highlightId || annotation.id));
     setAnnotationPopup(null);
@@ -451,9 +452,12 @@ function App() {
       const linkedNotes = (active?.notes || []).filter(item => item.anchor &&
         (item.anchor.highlightId === highlight.id || (item.page === highlight.page && item.anchor.text === highlight.text)));
       const bounds = mark.getBoundingClientRect();
-      setAnnotationPopup({highlight,notes:linkedNotes,
-        x:Math.max(12,Math.min(bounds.left,window.innerWidth-330)),
-        y:Math.max(12,Math.min(bounds.bottom+8,window.innerHeight-260))});
+      const popupWidth=Math.min(560,window.innerWidth-32);
+      const popupHeight=Math.min(window.innerHeight*.72,520);
+      const x=Math.max(16,Math.min(bounds.left,window.innerWidth-popupWidth-16));
+      const below=window.innerHeight-bounds.bottom-20;
+      const y=below>=Math.min(popupHeight,260)?bounds.bottom+10:Math.max(16,bounds.top-popupHeight-10);
+      setAnnotationPopup({highlight,notes:linkedNotes,x,y});
     },240);
   },[readMode,active]);
 
@@ -482,36 +486,44 @@ function App() {
       if (cancelled) return false;
       const root = canvasHost.current;
       const sheet = root?.querySelector('[data-page="'+target.page+'"]');
-      if (!sheet) return false;
-      setPage(target.page);
+      const layer = sheet?.querySelector(".pdf-text-layer");
+      if (!root || !sheet || !layer || !layer.childElementCount) return false;
+      const rootBounds = root.getBoundingClientRect();
+      const sheetBounds = sheet.getBoundingClientRect();
       const rect = target.rects?.[0];
-      if (rect) {
-        const y = target.normalized ? rect.y * sheet.clientHeight : rect.y;
-        root.scrollTo({top:Math.max(0,sheet.offsetTop+y-90),behavior:"smooth"});
-      } else {
-        sheet.scrollIntoView({behavior:"smooth",block:"start"});
-      }
-      const mark = target.id ? sheet.querySelector('[data-annotation-id="'+target.id+'"]') : null;
+      const localY = rect ? (target.normalized ? rect.y*sheet.clientHeight : rect.y) : 0;
+      const absoluteY = root.scrollTop + sheetBounds.top-rootBounds.top + localY;
+      root.scrollTo({top:Math.max(0,absoluteY-Math.min(150,root.clientHeight*.28)),behavior:"smooth"});
+      setPage(target.page);
+      const mark = target.id ? Array.from(sheet.querySelectorAll(".saved-highlight")).find(node=>node.dataset.annotationId===target.id) : null;
       if (mark) {
         mark.classList.add("annotation-focus-pulse");
-        window.setTimeout(()=>mark.classList.remove("annotation-focus-pulse"),1900);
-        pendingAnnotationRef.current = null;
-        setFocusedAnnotationId(target.id);
-        return true;
+        window.setTimeout(()=>mark.classList.remove("annotation-focus-pulse"),2200);
+      } else if (target.rects?.length) {
+        layer.querySelectorAll(".source-jump-target").forEach(node=>node.remove());
+        target.rects.forEach(rect=>{
+          const focus=document.createElement("div");
+          focus.className="source-jump-target";
+          const x=target.normalized?rect.x*layer.clientWidth:rect.x;
+          const y=target.normalized?rect.y*layer.clientHeight:rect.y;
+          const w=target.normalized?rect.w*layer.clientWidth:rect.w;
+          const h=target.normalized?rect.h*layer.clientHeight:rect.h;
+          Object.assign(focus.style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
+          layer.appendChild(focus);
+        });
+        window.setTimeout(()=>layer.querySelectorAll(".source-jump-target").forEach(node=>node.remove()),2600);
       }
-      if (!target.rects?.length || attempts > 24) {
-        pendingAnnotationRef.current = null;
-        setFocusedAnnotationId(target.id || "");
-        return true;
-      }
-      return false;
+      pendingAnnotationRef.current=null;
+      setFocusedAnnotationId(target.id || "");
+      return true;
     };
-    const frame = () => {
-      if (cancelled) return;
-      if (!locate() && attempts++ < 70) timer = window.setTimeout(frame,100);
+    const frame=()=>{
+      if(cancelled)return;
+      if(!locate() && attempts++<90) timer=window.setTimeout(frame,100);
+      else if(attempts>=90) pendingAnnotationRef.current=null;
     };
     frame();
-    return () => {cancelled=true;window.clearTimeout(timer);};
+    return ()=>{cancelled=true;window.clearTimeout(timer);};
   },[view,pdf,activeId]);
 
   useEffect(() => {
