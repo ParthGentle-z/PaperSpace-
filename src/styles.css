@@ -419,3 +419,50 @@
 .paper-annotation-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}.paper-annotation-header{width:100%;display:flex;align-items:center;gap:12px;padding:17px 19px;border:0;background:transparent;color:var(--text);text-align:left;cursor:pointer}.paper-annotation-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:10px;background:var(--wash);color:var(--accent);flex:none}.paper-annotation-title{display:grid;gap:3px;min-width:0;flex:1}.paper-annotation-title strong{font:700 14px Manrope;overflow-wrap:anywhere}.paper-annotation-title small{font-size:11px;color:var(--muted)}.paper-annotation-count{min-width:25px;height:25px;display:grid;place-items:center;border-radius:99px;background:var(--wash);color:var(--accent);font-size:11px;font-weight:800}.paper-annotation-header>svg:last-child{color:var(--soft);transition:transform .16s}.paper-annotation-card.expanded .paper-annotation-header>svg:last-child{transform:rotate(180deg)}
 .paper-annotation-body{display:grid;gap:10px;padding:0 14px 14px;border-top:1px solid var(--line)}.paper-annotation-body .research-note-card{margin-top:12px;box-shadow:none;background:var(--surface2)}.annotation-source-quote{margin:12px 0;padding:10px 12px;border-left:3px solid var(--accent);border-radius:5px;background:var(--wash);color:var(--text);font-size:12px;line-height:1.6;white-space:pre-wrap}.annotation-color-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:middle}.annotation-linked-thought{padding:9px 11px;border:1px solid var(--line);border-radius:8px;margin:8px 0;background:var(--surface)}.annotation-focused{outline:2px solid var(--accent);outline-offset:2px;animation:annotationFocus 1.5s ease}@keyframes annotationFocus{0%,100%{box-shadow:0 0 0 0 transparent}25%,65%{box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 18%,transparent)}}
 @media(max-width:650px){.annotation-controls{align-items:stretch}.annotation-controls .search-box{max-width:none}.annotation-filter{justify-content:space-between}.annotation-filter button{padding:7px 8px}.paper-annotation-header{padding:13px}.paper-annotation-body{padding-inline:9px}}
+
+
+/* Readable annotation reader: a wide, document-like panel rather than a tooltip. */
+.annotation-read-popover{
+  width:min(560px,calc(100vw - 32px));
+  max-height:min(72vh,620px);
+  overflow:auto;
+  padding:22px 24px 20px;
+  border-radius:16px;
+  box-shadow:0 22px 70px #080d1b55;
+  overscroll-behavior:contain;
+}
+.annotation-read-head{font-size:11px;letter-spacing:1.35px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.annotation-read-head .quiet-icon{flex:0 0 auto}
+.annotation-read-quote{
+  margin:16px 0 18px;
+  padding:15px 17px;
+  border-left:4px solid var(--accent);
+  background:var(--surface2);
+  border-radius:8px;
+  font-size:15px;
+  line-height:1.8;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.annotation-read-note{padding:15px 0;border-top:1px solid var(--line)}
+.annotation-read-note span,.annotation-linked-thought span{font-size:10px;letter-spacing:1px}
+.annotation-read-note p,.annotation-linked-thought p{font-size:15px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
+.annotation-read-popover .text-link{font-size:13px;padding-top:15px}
+.source-jump-target{
+  position:absolute;z-index:8;pointer-events:none;
+  background:rgba(255,211,82,.28);
+  border:2px solid #e3a928;border-radius:3px;
+  box-shadow:0 0 0 3px rgba(255,211,82,.16);
+  animation:source-jump-glow 1s ease-in-out 2;
+}
+.annotation-focus-pulse{
+  outline:3px solid #e3a928!important;outline-offset:2px!important;
+  opacity:.9!important;z-index:9!important;
+  animation:source-jump-glow 1s ease-in-out 2;
+}
+@keyframes source-jump-glow{0%,100%{filter:none}50%{filter:brightness(1.25)}}
+@media(max-width:640px){
+  .annotation-read-popover{width:calc(100vw - 24px);max-height:70vh;padding:17px}
+  .annotation-read-quote{font-size:14px;line-height:1.7;padding:12px}
+  .annotation-read-note p{font-size:14px}
+}
