@@ -95,6 +95,7 @@ function App() {
   const [termQuery,setTermQuery] = useState("");
   const [selectedConcept,setSelectedConcept] = useState(concepts[0]);
   const [note,setNote] = useState("");
+  const [noteAnchor,setNoteAnchor] = useState(null);
   const [selection,setSelection] = useState(null);
   const [contextMenu,setContextMenu] = useState(null);
   const [highlightColor,setHighlightColor] = useState("#ffe36b");
@@ -224,10 +225,19 @@ function App() {
 
   const saveNote = useCallback(async () => {
     if (!db || !active || !note.trim()) return;
-    const updated = {...active,notes:[...(active.notes || []),{id:crypto.randomUUID(),page,text:note.trim(),created:Date.now()}]};
+    const linkedPage = noteAnchor?.page || page;
+    const noteItem = {
+      id:crypto.randomUUID(),
+      page:linkedPage,
+      text:note.trim(),
+      created:Date.now(),
+      type:noteAnchor ? "passage" : "page",
+      anchor:noteAnchor ? {text:noteAnchor.text,rects:noteAnchor.rects || [],normalized:!!noteAnchor.normalized,selectionVersion:noteAnchor.selectionVersion || 4} : null
+    };
+    const updated = {...active,notes:[...(active.notes || []),noteItem]};
     await dbPut(db,updated); setPapers(items => items.map(item => item.id === updated.id ? updated : item));
-    setNote(""); notify("Note saved on page "+page+".");
-  },[db,active,note,page,notify]);
+    setNote(""); setNoteAnchor(null); notify(noteAnchor ? "Passage-linked note saved." : "Page note saved.");
+  },[db,active,note,noteAnchor,page,notify]);
 
   const saveHighlight = useCallback(async (color=highlightColor, category="General") => {
     if (!db || !active || !selection) return;
@@ -371,14 +381,18 @@ function App() {
     setContextMenu({x,y,text:captured.text});
   },[]);
 
-  const addSelectionAsNote = useCallback(async () => {
-    if (!db || !active || !selection) return;
-    const updated = {...active,notes:[...(active.notes || []),{id:crypto.randomUUID(),page:selection.page,text:"Selected passage:\n“"+selection.text+"”",created:Date.now()}]};
-    await dbPut(db,updated);
-    setPapers(items => items.map(item => item.id === updated.id ? updated : item));
-    setReaderTab("notes"); setContextMenu(null); selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null); window.getSelection()?.removeAllRanges();
-    notify("Passage added to this paper's notes.");
-  },[db,active,selection,notify]);
+  const addSelectionAsNote = useCallback(() => {
+    if (!selection?.text) return;
+    // Stage the exact selected passage as the note's anchor. The reader's note
+    // body remains the user's own interpretation, not a duplicated quotation.
+    setNoteAnchor({...selection});
+    setNote("");
+    setReaderTab("notes");
+    setContextMenu(null);
+    selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null);
+    window.getSelection()?.removeAllRanges();
+    notify("Passage attached. Add your thought and save the note.");
+  },[selection,notify]);
 
   const copySelection = useCallback(async () => {
     if (!selection?.text) return;
@@ -706,6 +720,7 @@ function App() {
     <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(sidebarVisible ? "" : "sidebar-hidden")+(topbarVisible ? "" : " reader-topbar-collapsed")}>
       {sidebarVisible && <aside className={"sidebar "+(mobileSidebar ? "mobile-open" : "")}>
         <div className="brand"><span className="brand-mark">P</span><span className="brand-name">PaperSpace</span><span className="brand-beta">RESEARCH DESK</span></div>
+        <button className="sidebar-add-paper" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={15}/> Add paper</button>
         <nav className="nav-list">
           <button className={"nav-item "+(view === "library" ? "active" : "")} onClick={() => setRoute("library")}><Library size={18}/><span>Library</span></button>
           <button className={"nav-item "+(view === "notes" ? "active" : "")} onClick={() => setRoute("notes")}><NotebookPen size={18}/><span>Research notes</span></button>
@@ -807,7 +822,7 @@ function App() {
         {view === "reader" && <div className="reader-content">
           <div className="reader-headline">
             <div className="reader-title-line"><span className="eyebrow">READING WORKSPACE</span><span className="reader-document-title" title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</span></div>
-            <div className="reader-headline-actions"><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small" onClick={() => setRoute("library")}><FolderOpen size={14}/> Open paper</button><button className="button button-primary button-small" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={14}/> Add paper</button></div>
+            <div className="reader-headline-actions"><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small" onClick={() => setRoute("library")}><FolderOpen size={14}/> Open paper</button></div>
           </div>
           <div className="reader-layout">
             <section className="pdf-panel">
@@ -864,8 +879,11 @@ function App() {
                 <button className={readerTab === "ai" ? "selected" : ""} onClick={() => setReaderTab("ai")}><Sparkles size={14}/>AI suggestions</button>
               </div>
               {readerTab === "notes" && <div className="reader-side-scroll">
-                <section className="side-card"><div className="card-eyebrow">PAGE {page} · READING NOTE</div><h3>Capture a thought</h3><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Record an explanation, question, connection or critique from this page."/><button className="button button-primary button-full" onClick={saveNote} disabled={!note.trim() || !active}>Save note</button></section>
-                <section className="side-card"><div className="card-eyebrow">THIS PAPER</div><h3>Recent thoughts</h3>{activeNotes.length ? [...activeNotes].sort((a,b)=>b.created-a.created).map(item=><article className="note-entry" key={item.id}><span>PAGE {item.page} · {dateLabel(item.created)}</span><p>{item.text}</p></article>) : <p className="helper-copy">Notes for this paper will appear here.</p>}</section>
+                <section className="side-card"><div className="card-eyebrow">{noteAnchor ? "PASSAGE-LINKED NOTE · PAGE "+noteAnchor.page : "PAGE "+page+" · READING NOTE"}</div><h3>{noteAnchor ? "What does this passage mean to you?" : "Capture a thought"}</h3>
+                  {noteAnchor && <div className="note-anchor-preview"><span>LINKED PASSAGE</span><blockquote>“{noteAnchor.text}”</blockquote><button type="button" onClick={()=>setNoteAnchor(null)}>Remove passage link</button></div>}
+                  <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder={noteAnchor ? "Explain it in your own words, question the claim, or connect it to another idea…" : "Record an explanation, question, connection or critique from this page."}/>
+                  <button className="button button-primary button-full" onClick={saveNote} disabled={!note.trim() || !active}>Save {noteAnchor ? "linked note" : "note"}</button></section>
+                <section className="side-card"><div className="card-eyebrow">THIS PAPER</div><h3>Recent thoughts</h3>{activeNotes.length ? [...activeNotes].sort((a,b)=>b.created-a.created).map(item=><article className={"note-entry "+(item.anchor ? "note-entry-linked" : "")} key={item.id}><button className="note-entry-jump" onClick={()=>scrollToPage(item.page)}><span>{item.anchor ? "LINKED PASSAGE" : "PAGE NOTE"} · PAGE {item.page} · {dateLabel(item.created)}</span><ChevronRight size={13}/></button>{item.anchor && <blockquote>{item.anchor.text}</blockquote>}<p>{item.text}</p></article>) : <p className="helper-copy">Notes for this paper will appear here.</p>}</section>
               </div>}
               {readerTab === "highlights" && <div className="reader-side-scroll">
                 <section className="side-card"><div className="card-eyebrow">ANNOTATIONS</div><h3>{activeHighlights.length} saved highlights</h3><p className="helper-copy">Select text, right-click it, then choose a colour. Remove any highlight individually here, or use Undo last in the reader toolbar.</p>
