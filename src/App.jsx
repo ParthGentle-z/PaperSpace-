@@ -131,6 +131,12 @@ function App() {
   const active = papers.find(p => p.id === activeId) || null;
   activeHighlightsRef.current = active?.highlights || [];
   const notes = useMemo(() => papers.flatMap(p => (p.notes || []).map(n => ({...n,paperName:p.name,paperId:p.id}))),[papers]);
+  const hasVisibleAnnotations = papers.some(paper => {
+    const q = annotationSearch.trim().toLowerCase();
+    const hasNotes = (paper.notes || []).some(item => (annotationFilter === "all" || annotationFilter === "notes" || (annotationFilter === "linked" && item.anchor)) && (paper.name+" "+item.text+" "+(item.anchor?.text || "")).toLowerCase().includes(q));
+    const hasHighlights = (paper.highlights || []).some(item => (annotationFilter === "all" || annotationFilter === "highlights") && (paper.name+" "+item.text+" "+(item.category || "")).toLowerCase().includes(q));
+    return hasNotes || hasHighlights;
+  });
   const filtered = useMemo(() => papers.filter(p => p.name.toLowerCase().includes(query.toLowerCase())),[papers,query]);
   const matchingConcepts = useMemo(() => concepts.filter(c => (c.term+" "+c.area).toLowerCase().includes(termQuery.toLowerCase())),[termQuery]);
   const openPapers = openIds.map(id => papers.find(p => p.id === id)).filter(Boolean);
@@ -436,7 +442,7 @@ function App() {
   const handleSavedHighlightClick = useCallback(event => {
     if (!readMode) return;
     const mark = event.target.closest?.(".saved-highlight");
-    if (!mark) return;
+    if (!mark) { setAnnotationPopup(null); return; }
     const highlight = activeHighlightsRef.current.find(item => item.id === mark.dataset.annotationId);
     if (!highlight) return;
     event.preventDefault(); event.stopPropagation();
@@ -1037,7 +1043,7 @@ function App() {
               </div>}
             </article>;
           })}
-          {!papers.some(paper=>(paper.notes||[]).length||(paper.highlights||[]).length)&&<div className="empty-state"><div className="empty-icon"><NotebookPen size={24}/></div><h3>No annotations yet</h3><p>Open a paper and save a note or highlight. They will be grouped here by source paper.</p><button className="button button-primary" onClick={()=>setRoute("library")}>Go to library</button></div>}
+          {!hasVisibleAnnotations&&<div className="empty-state"><div className="empty-icon"><NotebookPen size={24}/></div><h3>No annotations yet</h3><p>Open a paper and save a note or highlight. They will be grouped here by source paper.</p><button className="button button-primary" onClick={()=>setRoute("library")}>Go to library</button></div>}
           </div>
         </div>}
 
