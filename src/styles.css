@@ -199,3 +199,26 @@
  .toolbar-page span{min-width:35px}
  .pdf-page-host{padding:8px 4px 20px}
 }
+
+
+/* Reader reliability: accurate PDF.js selectable text layer and clear page states */
+.pdf-text-layer.textLayer{position:absolute;inset:0;overflow:hidden;line-height:1;opacity:1;z-index:2;user-select:text;-webkit-user-select:text}
+.pdf-text-layer.textLayer span{position:absolute;color:transparent;white-space:pre;cursor:text;transform-origin:0 0;line-height:1;user-select:text;-webkit-user-select:text}
+.pdf-text-layer.textLayer span::selection{background:rgba(105,87,225,.34);color:transparent}
+.pdf-sheet{flex:none;overflow:hidden}
+.pdf-sheet-loading{display:flex;align-items:center;justify-content:center;background:#fff}
+.pdf-page-placeholder{font:12px system-ui,sans-serif;color:#77839a;line-height:1;padding:16px}
+.pdf-page-error-message{font:13px/1.6 system-ui,sans-serif;color:#a34c4c;line-height:1.6;padding:24px;margin:0;white-space:normal}
+.pdf-sheet-error{display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #e4b8b8}
+.pdf-page-host{scrollbar-width:thin;scrollbar-color:#9aa4b5 transparent}
+.pdf-toolbar{position:relative;z-index:3}
+.highlight-colors{display:flex;align-items:center;gap:5px}
+.highlight-swatch{width:19px;height:19px;border-radius:50%;border:2px solid transparent;background:var(--swatch);cursor:pointer;padding:0;box-shadow:inset 0 0 0 1px #0002}
+.highlight-swatch.active{outline:2px solid var(--accent);outline-offset:2px}
+.saved-highlight{z-index:1;pointer-events:none;mix-blend-mode:multiply}
+.pdf-text-layer.textLayer{z-index:2}
+@media(max-width:650px){
+ .pdf-sheet{max-width:none}
+ .pdf-page-host{touch-action:pan-y pan-x}
+ .highlight-swatch{width:17px;height:17px}
+}
