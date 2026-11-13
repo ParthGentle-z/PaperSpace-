@@ -275,8 +275,21 @@ function App() {
     const captured = captureSelection();
     if (!captured?.text) return;
     event.preventDefault();
-    const menuWidth = 248, menuHeight = 190;
-    setContextMenu({x:Math.max(8,Math.min(event.clientX,window.innerWidth-menuWidth-8)),y:Math.max(8,Math.min(event.clientY,window.innerHeight-menuHeight-8)),text:captured.text});
+
+    // Anchor the menu to the selected passage, not the pointer. This keeps the
+    // popover from covering the text and making the selection look incomplete.
+    const range = window.getSelection()?.rangeCount ? window.getSelection().getRangeAt(0) : null;
+    const bounds = range?.getBoundingClientRect();
+    const menuWidth = 284, menuHeight = 252, gutter = 10;
+    const x = bounds
+      ? Math.max(8, Math.min(bounds.left, window.innerWidth-menuWidth-8))
+      : Math.max(8, Math.min(event.clientX,window.innerWidth-menuWidth-8));
+    let y = bounds ? bounds.bottom + gutter : event.clientY + gutter;
+    if (y + menuHeight > window.innerHeight - 8) {
+      y = bounds ? bounds.top - menuHeight - gutter : event.clientY - menuHeight - gutter;
+    }
+    y = Math.max(8,Math.min(y,window.innerHeight-menuHeight-8));
+    setContextMenu({x,y,text:captured.text});
   },[captureSelection]);
 
   const addSelectionAsNote = useCallback(async () => {
@@ -677,7 +690,10 @@ function App() {
                 <div className="selection-menu-label">SELECTED PASSAGE</div>
                 <p className="selection-menu-quote">{contextMenu.text}</p>
                 <div className="selection-menu-colors" aria-label="Highlight selected passage">
-                  {[["#ffe36b","Yellow"],["#a7e8bd","Green"],["#9ed8ff","Blue"],["#f6b0ca","Pink"]].map(([color,label])=><button key={color} className="selection-menu-color" style={{"--swatch":color}} title={"Highlight "+label} aria-label={"Highlight "+label} onClick={()=>saveHighlight(color)}/>)}
+                  {[
+                    ["#FFE58F","Warm yellow"],["#BFE8C8","Mint green"],["#B9DDF5","Sky blue"],["#F4C2D7","Soft rose"],["#D8C8F3","Lavender"],
+                    ["#F7D1B5","Peach"],["#B7E5E0","Aqua"],["#C7D2FE","Periwinkle"],["#DCEBA8","Pistachio"],["#F6B6A6","Coral"]
+                  ].map(([color,label])=><button key={color} className="selection-menu-color" style={{"--swatch":color}} title={"Highlight "+label} aria-label={"Highlight "+label} onClick={()=>saveHighlight(color)}/>)}
                 </div>
                 <button className="selection-menu-action" onClick={addSelectionAsNote}><NotebookPen size={14}/> Add to reading notes</button>
                 <button className="selection-menu-action" onClick={copySelection}><FileText size={14}/> Copy selected text</button>
