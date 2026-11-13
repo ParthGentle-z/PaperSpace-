@@ -292,3 +292,19 @@
   .selection-context-menu{width:min(276px,calc(100vw - 16px))}
   .selection-menu-colors{grid-template-columns:repeat(5,24px);gap:10px 12px}
 }
+
+
+/* Annotation legibility correction: keep the PDF's original glyphs crisp.
+   Saved marks are translucent overlays; do not multiply/darken the raster text. */
+.pdf-text-layer .saved-highlight{
+  opacity:.22!important;
+  mix-blend-mode:normal!important;
+  border-radius:1px;
+  pointer-events:none;
+}
+.pdf-text-layer.textLayer span::selection,
+.pdf-text-layer.textLayer *::selection{
+  background:rgba(91,76,210,.30)!important;
+  color:transparent!important;
+  text-shadow:none!important;
+}
