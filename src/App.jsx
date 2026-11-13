@@ -101,7 +101,8 @@ function App() {
   const [annotationPopup,setAnnotationPopup] = useState(null);
   const [editingAnnotationNoteId,setEditingAnnotationNoteId] = useState(null);
   const [annotationDraft,setAnnotationDraft] = useState("");
-  const [annotationSaveBusy,setAnnotationSaveBusy] = useState(false);\n  const [annotationQuoteExpanded,setAnnotationQuoteExpanded] = useState(false);
+  const [annotationSaveBusy,setAnnotationSaveBusy] = useState(false);
+  const [annotationQuoteExpanded,setAnnotationQuoteExpanded] = useState(false);
   const [focusedAnnotationId,setFocusedAnnotationId] = useState("");
   const [annotationSearch,setAnnotationSearch] = useState("");
   const [annotationFilter,setAnnotationFilter] = useState("all");
