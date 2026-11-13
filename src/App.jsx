@@ -4,7 +4,7 @@ import {
   ChevronRight, ChevronLeft, ChevronUp, ChevronDown, X, ZoomIn, ZoomOut, Maximize2, FileText,
   Trash2, Download, HelpCircle, Sparkles, Menu, PanelLeftClose, PanelLeftOpen,
   FolderOpen, Cloud, Highlighter, MessageSquareText, RefreshCw, ExternalLink,
-  MoreHorizontal, Pencil, Save, Copy, Check
+  Pencil, Save, Copy, Check
 } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -101,7 +101,6 @@ function App() {
   const [annotationPopup,setAnnotationPopup] = useState(null);
   const [editingAnnotationNoteId,setEditingAnnotationNoteId] = useState(null);
   const [annotationDraft,setAnnotationDraft] = useState("");
-  const [annotationMenuOpen,setAnnotationMenuOpen] = useState(false);
   const [annotationSaveBusy,setAnnotationSaveBusy] = useState(false);\n  const [annotationQuoteExpanded,setAnnotationQuoteExpanded] = useState(false);
   const [focusedAnnotationId,setFocusedAnnotationId] = useState("");
   const [annotationSearch,setAnnotationSearch] = useState("");
@@ -280,7 +279,6 @@ function App() {
   const beginAnnotationEdit = useCallback((item=null) => {
     setEditingAnnotationNoteId(item?.id || "__new__");
     setAnnotationDraft(item?.text || "");
-    setAnnotationMenuOpen(false);
   },[]);
 
   const saveAnnotationNote = useCallback(async () => {
@@ -1165,18 +1163,11 @@ function App() {
             {annotationPopup && readMode && <div className="annotation-read-popover" onClick={event=>event.stopPropagation()}>
                 <div className="annotation-read-head">
                   <span>YOUR ANNOTATION</span>
-                  <div className="annotation-head-actions">
-                    <button className="quiet-icon annotation-more-trigger" aria-label="More annotation options" aria-expanded={annotationMenuOpen} onClick={()=>setAnnotationMenuOpen(value=>!value)}><MoreHorizontal size={17}/></button>
-                    <button className="quiet-icon" aria-label="Close annotation" onClick={closeAnnotationPanel}><X size={14}/></button>
-                    {annotationMenuOpen && <div className="annotation-more-menu">
-                      <button onClick={()=>copyAnnotationText(annotationPopup.highlight.text)}><Copy size={14}/>Copy highlighted passage</button>
-                      <button onClick={()=>copyAnnotationText(annotationPopup.notes.map(item=>item.text).join("\\n\\n"))} disabled={!annotationPopup.notes.length}><Copy size={14}/>Copy saved notes</button>
-                      <button className="danger" onClick={deleteAnnotationHighlight}><Trash2 size={14}/>Delete highlight</button>
-                    </div>}
-                  </div>
+                  <button className="quiet-icon" aria-label="Close annotation" onClick={closeAnnotationPanel}><X size={14}/></button>
                 </div>
                 <div className={"annotation-read-quote "+(annotationQuoteExpanded ? "expanded" : "compact")}><span>{annotationPopup.highlight.text}</span></div>
                 {(annotationPopup.highlight.text || "").length > 190 && <button className="annotation-quote-toggle" onClick={()=>setAnnotationQuoteExpanded(value=>!value)}>{annotationQuoteExpanded ? "Show less" : "Read full highlighted passage"} <ChevronDown size={12}/></button>}
+                <section className="annotation-notes-area">
                 <div className="annotation-section-label"><span>MY NOTES</span><button className="annotation-add-note" onClick={()=>beginAnnotationEdit()}><Plus size={13}/> Add note</button></div>
                 {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}>
                   <div className="annotation-note-meta"><span>YOUR NOTE · {dateLabel(item.created)}</span><button className="annotation-edit-button" onClick={()=>beginAnnotationEdit(item)}><Pencil size={12}/> Edit</button></div>
@@ -1186,6 +1177,7 @@ function App() {
                 </article>) : editingAnnotationNoteId !== "__new__" && <div className="annotation-empty-note"><p>No note is linked to this highlight yet.</p><button onClick={()=>beginAnnotationEdit()}><Pencil size={13}/> Write a note for this passage</button></div>}
                 {editingAnnotationNoteId === "__new__" && <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save note</>}</button></div></div>}
                 <button className="text-link" onClick={()=>{if(editingAnnotationNoteId && annotationDraft.trim() && !window.confirm("Discard your unsaved annotation changes before opening Research Notes?")) return; setAnnotationPopup(null);setEditingAnnotationNoteId(null);setAnnotationDraft("");setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
+                </section>
               </div>}
             <aside className="reader-side">
               <div className="reader-side-tabs">
