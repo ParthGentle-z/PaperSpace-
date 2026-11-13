@@ -279,7 +279,10 @@ function App() {
   useEffect(() => () => { try { pdf?.destroy?.(); } catch {} },[pdf]);
 
   useEffect(() => {
-    if (!pdf || !canvasHost.current) return;
+    // The reader canvas is conditionally mounted. Rebuild its page shells whenever
+    // the user returns from Library, Notes, or Concept Desk; keep the PDF document
+    // alive while those other workspace views are active.
+    if (view !== "reader" || !pdf || !canvasHost.current) return;
     let cancelled = false;
     let resizeTimer = 0;
     let generation = 0;
@@ -459,7 +462,7 @@ function App() {
       cancelTasks();
       root.removeEventListener("scroll",onScroll);
     };
-  },[pdf,zoom,fit,activeId,active?.highlights?.map(item=>item.id+":"+(item.color||"")).join(",")]);
+  },[view,pdf,zoom,fit,activeId,active?.highlights?.map(item=>item.id+":"+(item.color||"")).join(",")]);
 
   const addLocalFiles = useCallback(async files => {
     if (!db) return;
