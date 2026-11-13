@@ -1168,17 +1168,29 @@ function App() {
                   <button className="quiet-icon" aria-label="Close annotation" onClick={closeAnnotationPanel}><X size={14}/></button>
                 </div>
                 <div className={"annotation-read-quote "+(annotationQuoteExpanded ? "expanded" : "compact")}><span>{annotationPopup.highlight.text}</span></div>
-                {(annotationPopup.highlight.text || "").length > 190 && <button className="annotation-quote-toggle" onClick={()=>setAnnotationQuoteExpanded(value=>!value)}>{annotationQuoteExpanded ? "Show less" : "Read full highlighted passage"} <ChevronDown size={12}/></button>}
                 <section className="annotation-notes-area">
-                <div className="annotation-section-label"><span>MY NOTES</span><button className="annotation-add-note" onClick={()=>beginAnnotationEdit()}><Plus size={13}/> Add note</button></div>
-                {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}>
-                  <div className="annotation-note-meta"><span>YOUR NOTE · {dateLabel(item.created)}</span><button className="annotation-edit-button" onClick={()=>beginAnnotationEdit(item)}><Pencil size={12}/> Edit</button></div>
-                  {editingAnnotationNoteId === item.id
-                    ? <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save changes</>}</button></div></div>
-                    : <p>{item.text}</p>}
-                </article>) : editingAnnotationNoteId !== "__new__" && <div className="annotation-empty-note"><p>No note is linked to this highlight yet.</p><button onClick={()=>beginAnnotationEdit()}><Pencil size={13}/> Write a note for this passage</button></div>}
-                {editingAnnotationNoteId === "__new__" && <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save note</>}</button></div></div>}
-                <button className="text-link" onClick={()=>{if(editingAnnotationNoteId && annotationDraft.trim() && !window.confirm("Discard your unsaved annotation changes before opening Research Notes?")) return; setAnnotationPopup(null);setEditingAnnotationNoteId(null);setAnnotationDraft("");setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
+                  <div className="annotation-section-label">
+                    <div><span>YOUR NOTES</span><small>{annotationPopup.notes.length} saved {annotationPopup.notes.length === 1 ? "note" : "notes"}</small></div>
+                    <button className="annotation-add-note" onClick={()=>beginAnnotationEdit()}><Plus size={13}/> Add note</button>
+                  </div>
+                  <div className="annotation-note-list">
+                    {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}>
+                      <div className="annotation-note-meta">
+                        <span>NOTE · {dateLabel(item.created)}</span>
+                        <div className="annotation-note-actions">
+                          <button className="annotation-edit-button" onClick={()=>copyAnnotationText(item.text)}><Copy size={12}/> Copy</button>
+                          <button className="annotation-edit-button" onClick={()=>beginAnnotationEdit(item)}><Pencil size={12}/> Edit</button>
+                        </div>
+                      </div>
+                      {editingAnnotationNoteId === item.id
+                        ? <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save changes</>}</button></div></div>
+                        : <p>{item.text}</p>}
+                    </article>) : editingAnnotationNoteId !== "__new__" && <div className="annotation-empty-note"><p>No note is linked to this highlight yet.</p><button onClick={()=>beginAnnotationEdit()}><Pencil size={13}/> Write a note for this passage</button></div>}
+                    {editingAnnotationNoteId === "__new__" && <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save note</>}</button></div></div>}
+                  </div>
+                  <div className="annotation-notes-footer">
+                    <button className="text-link" onClick={()=>{if(editingAnnotationNoteId && annotationDraft.trim() && !window.confirm("Discard your unsaved annotation changes before opening Research Notes?")) return; setAnnotationPopup(null);setEditingAnnotationNoteId(null);setAnnotationDraft("");setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
+                  </div>
                 </section>
               </div>}
             <aside className="reader-side">
