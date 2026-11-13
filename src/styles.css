@@ -593,3 +593,95 @@
   overflow-wrap:anywhere
 }
 .annotation-editor textarea{white-space:pre-wrap;tab-size:4}
+
+
+/* Annotation panel layout: compact source excerpt, dedicated notes workspace. */
+.reader-layout.annotation-open .annotation-read-popover{
+  height:calc(100vh - 230px);
+  min-height:420px;
+  max-height:calc(100vh - 230px);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  gap:0;
+}
+.reader-layout.annotation-open .annotation-read-head{
+  flex:0 0 auto;
+}
+.reader-layout.annotation-open .annotation-read-quote{
+  display:block!important;
+  flex:0 0 auto;
+  max-height:58px;
+  min-height:0;
+  overflow:hidden!important;
+  margin:13px 0 2px!important;
+  padding:9px 12px!important;
+  font-size:12px!important;
+  line-height:1.55!important;
+  white-space:normal!important;
+  overflow-wrap:anywhere;
+  position:relative;
+  border-left-width:3px;
+}
+.reader-layout.annotation-open .annotation-read-quote span{
+  display:inline;
+  white-space:pre-wrap;
+}
+.reader-layout.annotation-open .annotation-read-quote.expanded{
+  max-height:min(26vh,210px);
+  overflow:auto!important;
+}
+.reader-layout.annotation-open .annotation-quote-toggle{
+  flex:0 0 auto;
+  padding:4px 0 10px;
+}
+.reader-layout.annotation-open .annotation-notes-area{
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  border-top:1px solid var(--line);
+  padding-top:12px;
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-section-label{
+  flex:0 0 auto;
+  margin:0 0 8px!important;
+  padding:0 0 8px!important;
+  border:0!important;
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-read-note,
+.reader-layout.annotation-open .annotation-notes-area .annotation-empty-note,
+.reader-layout.annotation-open .annotation-notes-area .annotation-editor{
+  flex:0 0 auto;
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-read-note{
+  margin:0 0 10px;
+  padding:13px 14px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface2);
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-read-note p{
+  margin:7px 0 0;
+  font-size:14px;
+  line-height:1.75;
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-empty-note{
+  margin:2px 0 12px;
+}
+.reader-layout.annotation-open .annotation-notes-area .text-link{
+  flex:0 0 auto;
+  margin-top:auto;
+  padding:14px 0 3px;
+}
+.annotation-head-actions{display:flex;align-items:center}
+.annotation-more-trigger,.annotation-more-menu{display:none!important}
+@media(max-width:900px){
+  .reader-layout.annotation-open .annotation-read-popover{
+    height:auto;
+    min-height:300px;
+    max-height:48vh;
+  }
+}
