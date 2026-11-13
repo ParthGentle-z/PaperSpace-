@@ -204,7 +204,7 @@ function App() {
     if (!db || !window.confirm("Remove this PDF and its notes/highlights from this browser?")) return;
     await dbDelete(db,id);
     setOpenIds(ids => ids.filter(value => value !== id));
-    if (activeId === id) { setActiveId(""); setPdf(null); setRoute("library"); }
+    if (activeId === id) { pdfLoadSequenceRef.current++; openingIdsRef.current.delete(id); setActiveId(""); setPdf(null); setRoute("library"); }
     await refresh();
     notify("Paper removed from this browser.");
   },[db,activeId,refresh,notify,setRoute]);
