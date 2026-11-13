@@ -1167,7 +1167,7 @@ function App() {
                   <span>YOUR ANNOTATION</span>
                   <button className="quiet-icon" aria-label="Close annotation" onClick={closeAnnotationPanel}><X size={14}/></button>
                 </div>
-                {!editingAnnotationNoteId && <div className={"annotation-read-quote "+(annotationQuoteExpanded ? "expanded" : "compact")}><span>{annotationPopup.highlight.text}</span></div>}
+                {editingAnnotationNoteId === null && <div className={"annotation-read-quote "+(annotationQuoteExpanded ? "expanded" : "compact")}><span>{annotationPopup.highlight.text}</span></div>}
                 <section className="annotation-notes-area">
                   <div className="annotation-section-label">
                     <div><span>YOUR NOTES</span><small>{annotationPopup.notes.length} saved {annotationPopup.notes.length === 1 ? "note" : "notes"}</small></div>
