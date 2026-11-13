@@ -457,6 +457,11 @@ function App() {
         entry.shell.style.height = viewport.height + "px";
         entry.layer.style.width = viewport.width + "px";
         entry.layer.style.height = viewport.height + "px";
+        // PDF.js TextLayer uses the viewport scale for text-span geometry.
+        // Set both variables explicitly before render so browser hit-testing,
+        // native selection and the visible canvas share the same coordinate system.
+        entry.layer.style.setProperty("--scale-factor",String(viewport.scale));
+        entry.layer.style.setProperty("--total-scale-factor",String(viewport.scale));
         entry.shell.replaceChildren(canvas,entry.layer);
         const task = pdfPage.render({
           canvasContext:context,viewport,
@@ -763,7 +768,16 @@ function App() {
                 </div>
               </div>
               {pdfError ? <div className="reader-error">{pdfError}</div> : !pdf ? <div className="reader-empty"><FileText size={34}/><h2>{pdfLoading ? "Loading your paper…" : "Open a paper to read"}</h2><p>{pdfLoading ? "Preparing the PDF pages. Large documents may take a moment." : "Choose a file from Open papers on the left, or return to the Library to add one."}</p>{!pdfLoading && <button className="button button-primary" onClick={() => setRoute("library")}>Go to library</button>}</div> :
-                <div className="pdf-page-host" ref={canvasHost} onMouseUp={event => { if (event.button !== 0) return; setContextMenu(null); const captured = captureSelection(); if (!captured) { selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null); } }} onTouchEnd={captureSelection} onContextMenu={handlePdfContextMenu}/>}
+                <div className="pdf-page-host" ref={canvasHost} onMouseUp={event => {
+                  if (event.button !== 0) return;
+                  setContextMenu(null);
+                  // Chromium can dispatch mouseup before its final selection range
+                  // is committed for transformed PDF.js text spans. Read after paint.
+                  requestAnimationFrame(() => requestAnimationFrame(() => {
+                    const captured = captureSelection();
+                    if (!captured) { selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null); }
+                  }));
+                }} onTouchEnd={() => requestAnimationFrame(captureSelection)} onContextMenu={handlePdfContextMenu}/>
               {contextMenu && <div className="selection-context-menu" role="menu" style={{left:contextMenu.x,top:contextMenu.y}} onMouseDown={event=>event.preventDefault()}>
                 <div className="selection-menu-label">SELECTED PASSAGE</div>
                 <p className="selection-menu-quote">{contextMenu.text}</p>
