@@ -251,108 +251,100 @@ function App() {
 
   const captureSelection = useCallback(() => {
     const selected = window.getSelection();
-    if (!selected || !selected.rangeCount || !canvasHost.current) return null;
+    if (!selected || !selected.rangeCount || !canvasHost.current || selected.isCollapsed) return null;
     const range = selected.getRangeAt(0);
-    const text = range.toString().trim();
-    if (!text) return null;
-
-    const startNode = range.startContainer.nodeType === Node.ELEMENT_NODE
-      ? range.startContainer : range.startContainer.parentElement;
-    const endNode = range.endContainer.nodeType === Node.ELEMENT_NODE
-      ? range.endContainer : range.endContainer.parentElement;
+    const startNode = range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentElement;
+    const endNode = range.endContainer.nodeType === Node.ELEMENT_NODE ? range.endContainer : range.endContainer.parentElement;
     const sheet = startNode?.closest(".pdf-sheet");
-    // A passage must belong to one page. Cross-page selections are rejected
-    // rather than silently storing coordinates against the wrong page.
-    if (!sheet || !endNode?.closest(".pdf-sheet") || endNode.closest(".pdf-sheet") !== sheet) return null;
+    if (!sheet || endNode?.closest(".pdf-sheet") !== sheet) return null;
     const layer = sheet.querySelector(".pdf-text-layer");
     if (!layer) return null;
 
+    // Use the browser's actual painted selection rectangles as the source of
+    // truth. PDF text items can be stored in a different logical order from
+    // their visual order; range.toString() can therefore return unrelated
+    // neighbouring words even when the purple selection looks correct.
     const origin = layer.getBoundingClientRect();
-    if (!origin.width || !origin.height) return null;
+    const selectionRects = Array.from(range.getClientRects()).filter(rect =>
+      rect.width > 0.5 && rect.height > 0.5 &&
+      rect.right > origin.left && rect.left < origin.right &&
+      rect.bottom > origin.top && rect.top < origin.bottom
+    );
+    if (!selectionRects.length) return null;
 
-    // PDF.js positions each text span independently. Range.getClientRects()
-    // can return the full span box for partial-span selections in some PDFs.
-    // Measure selected character fragments instead, then merge adjacent glyphs
-    // on the same visual line into tight highlight rectangles.
     const walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
-    const glyphRects = [];
+    const glyphs = [];
     let node;
     while ((node = walker.nextNode())) {
-      const length = node.nodeValue?.length || 0;
-      if (!length) continue;
-      let first = 0;
-      let last = length;
-      try {
-        const atStart = range.comparePoint(node, 0);
-        const atEnd = range.comparePoint(node, length);
-        if (atStart === 1 || atEnd === -1) continue;
-
-        if (atStart === -1) {
-          let lo = 0, hi = length;
-          while (lo < hi) {
-            const mid = Math.floor((lo + hi) / 2);
-            if (range.comparePoint(node, mid) === -1) lo = mid + 1;
-            else hi = mid;
-          }
-          first = lo;
-        }
-        if (atEnd === 1) {
-          let lo = first, hi = length;
-          while (lo < hi) {
-            const mid = Math.floor((lo + hi) / 2);
-            if (range.comparePoint(node, mid) === 1) hi = mid;
-            else lo = mid + 1;
-          }
-          last = lo;
-        }
-      } catch { continue; }
-
-      for (let offset = first; offset < last; offset++) {
+      const value = node.nodeValue || "";
+      for (let offset = 0; offset < value.length; offset++) {
+        const char = value[offset];
+        if (char === "\\n" || char === "\\r") continue;
         const charRange = document.createRange();
         charRange.setStart(node, offset);
         charRange.setEnd(node, offset + 1);
         const rect = charRange.getBoundingClientRect();
-        if (rect.width > 0.1 && rect.height > 0.1 &&
-            rect.right > origin.left && rect.left < origin.right &&
-            rect.bottom > origin.top && rect.top < origin.bottom) {
-          glyphRects.push({left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom});
-        }
+        if (rect.width <= 0.15 || rect.height <= 0.15) continue;
+
+        const hit = selectionRects.some(selectionRect => {
+          const vertical = Math.max(0, Math.min(rect.bottom, selectionRect.bottom) - Math.max(rect.top, selectionRect.top));
+          const horizontal = Math.max(0, Math.min(rect.right, selectionRect.right) - Math.max(rect.left, selectionRect.left));
+          return vertical >= Math.min(rect.height, selectionRect.height) * 0.42 &&
+            (char.trim() ? horizontal >= Math.min(rect.width, selectionRect.width) * 0.35 : horizontal > 0.25);
+        });
+        if (hit) glyphs.push({
+          char,
+          left:rect.left, right:rect.right, top:rect.top, bottom:rect.bottom,
+          center:(rect.top+rect.bottom)/2
+        });
       }
     }
+    if (!glyphs.length) return null;
 
-    if (!glyphRects.length) return null;
-    glyphRects.sort((a,b) => a.top-b.top || a.left-b.left);
+    // Reconstruct the passage in visual reading order, not DOM/text-item order.
+    glyphs.sort((a,b) => a.center-b.center || a.left-b.left);
     const lines = [];
-    for (const glyph of glyphRects) {
-      const tolerance = Math.max(2, (glyph.bottom-glyph.top)*0.22);
-      let line = lines.find(item => Math.abs(item.top-glyph.top) <= tolerance);
+    for (const glyph of glyphs) {
+      let line = lines.find(item => Math.abs(item.center-glyph.center) <= Math.max(2, Math.min(item.height,glyph.bottom-glyph.top)*0.32));
       if (!line) {
-        line = {top:glyph.top,bottom:glyph.bottom,rects:[]};
+        line = {center:glyph.center,top:glyph.top,bottom:glyph.bottom,height:glyph.bottom-glyph.top,glyphs:[]};
         lines.push(line);
       }
-      line.rects.push(glyph);
+      line.glyphs.push(glyph);
+      line.center = line.glyphs.reduce((sum,item)=>sum+item.center,0)/line.glyphs.length;
       line.top = Math.min(line.top,glyph.top);
       line.bottom = Math.max(line.bottom,glyph.bottom);
+      line.height = line.bottom-line.top;
     }
+    lines.sort((a,b)=>a.center-b.center);
 
     const rects = [];
+    const textLines = [];
     for (const line of lines) {
-      line.rects.sort((a,b)=>a.left-b.left);
+      line.glyphs.sort((a,b)=>a.left-b.left);
+      let lineText = "";
+      let previous = null;
       let merged = null;
-      for (const glyph of line.rects) {
-        const gap = merged ? glyph.left-merged.right : Infinity;
-        const joinGap = Math.max(2.5,(glyph.bottom-glyph.top)*0.18);
-        if (merged && gap <= joinGap) {
+      for (const glyph of line.glyphs) {
+        const gap = previous ? glyph.left-previous.right : 0;
+        const spaceThreshold = Math.max(1.5,line.height*0.19);
+        if (previous && gap > spaceThreshold && !/\\s$/.test(lineText) && !/^\\s/.test(glyph.char)) lineText += " ";
+        lineText += glyph.char;
+        if (merged && glyph.left-merged.right <= Math.max(2.5,line.height*0.18)) {
           merged.right = Math.max(merged.right,glyph.right);
           merged.top = Math.min(merged.top,glyph.top);
           merged.bottom = Math.max(merged.bottom,glyph.bottom);
         } else {
           if (merged) rects.push(merged);
-          merged = {...glyph};
+          merged = {left:glyph.left,right:glyph.right,top:glyph.top,bottom:glyph.bottom};
         }
+        previous = glyph;
       }
       if (merged) rects.push(merged);
+      if (lineText.trim()) textLines.push(lineText.trim());
     }
+    const text = textLines.join("\\n").replace(/[ \\t]+/g," ").trim();
+    if (!text) return null;
 
     const normalizedRects = rects.map(rect => ({
       x:(rect.left-origin.left)/origin.width,
@@ -367,11 +359,14 @@ function App() {
       page:Number(sheet.dataset.page),
       rects:normalizedRects,
       normalized:true,
-      selectionVersion:2
+      selectionVersion:3
     };
     selectionRef.current = captured;
-    const bounds = range.getBoundingClientRect();
-    selectionBoundsRef.current = bounds ? {left:bounds.left,top:bounds.top,right:bounds.right,bottom:bounds.bottom} : null;
+    const bounds = selectionRects.reduce((box,rect)=>({
+      left:Math.min(box.left,rect.left), top:Math.min(box.top,rect.top),
+      right:Math.max(box.right,rect.right), bottom:Math.max(box.bottom,rect.bottom)
+    }),{left:Infinity,top:Infinity,right:-Infinity,bottom:-Infinity});
+    selectionBoundsRef.current = bounds;
     setSelection(captured);
     return captured;
   },[]);
