@@ -470,24 +470,36 @@ function App() {
     if (target.paperId !== activeId) return;
     let cancelled = false, attempts = 0;
     const locate = () => {
-      if (cancelled) return;
+      if (cancelled) return false;
       const root = canvasHost.current;
       const sheet = root?.querySelector('[data-page="'+target.page+'"]');
-      if (!sheet) return;
-      sheet.scrollIntoView({behavior:"smooth",block:"start"});
+      if (!sheet) return false;
       setPage(target.page);
       const rect = target.rects?.[0];
       if (rect) {
         const y = target.normalized ? rect.y * sheet.clientHeight : rect.y;
         root.scrollTo({top:Math.max(0,sheet.offsetTop+y-90),behavior:"smooth"});
+      } else {
+        sheet.scrollIntoView({behavior:"smooth",block:"start"});
       }
-      setFocusedAnnotationId(target.id || "");
-      pendingAnnotationRef.current = null;
+      const mark = target.id ? sheet.querySelector('[data-annotation-id="'+target.id+'"]') : null;
+      if (mark) {
+        mark.classList.add("annotation-focus-pulse");
+        window.setTimeout(()=>mark.classList.remove("annotation-focus-pulse"),1900);
+        pendingAnnotationRef.current = null;
+        setFocusedAnnotationId(target.id);
+        return true;
+      }
+      if (!target.rects?.length || attempts > 24) {
+        pendingAnnotationRef.current = null;
+        setFocusedAnnotationId(target.id || "");
+        return true;
+      }
+      return false;
     };
     const frame = () => {
       if (cancelled) return;
-      locate();
-      if (pendingAnnotationRef.current && attempts++ < 30) requestAnimationFrame(frame);
+      if (!locate() && attempts++ < 70) requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
     return () => {cancelled=true;};
