@@ -499,19 +499,56 @@ function App() {
       if (mark) {
         mark.classList.add("annotation-focus-pulse");
         window.setTimeout(()=>mark.classList.remove("annotation-focus-pulse"),2200);
-      } else if (target.rects?.length) {
+      } else {
         layer.querySelectorAll(".source-jump-target").forEach(node=>node.remove());
-        target.rects.forEach(rect=>{
+        const focusRects=[];
+        if (target.rects?.length) {
+          target.rects.forEach(rect=>{
+            const x=target.normalized?rect.x*layer.clientWidth:rect.x;
+            const y=target.normalized?rect.y*layer.clientHeight:rect.y;
+            const w=target.normalized?rect.w*layer.clientWidth:rect.w;
+            const h=target.normalized?rect.h*layer.clientHeight:rect.h;
+            focusRects.push({left:x,top:y,width:w,height:h});
+          });
+        } else if (target.text) {
+          // Legacy notes sometimes contain the exact passage but no saved
+          // rectangles. Find it across PDF.js text spans and create a DOM Range.
+          const walker=document.createTreeWalker(layer,NodeFilter.SHOW_TEXT);
+          const nodes=[]; let raw="", node;
+          while((node=walker.nextNode())) { nodes.push({node,start:raw.length,end:raw.length+node.nodeValue.length}); raw+=node.nodeValue; }
+          const normalizeWithMap=value=>{
+            let out="", map=[], whitespace=false;
+            for(let i=0;i<value.length;i++){
+              const ch=value[i];
+              if(/\s/.test(ch)){ if(!whitespace && out.length){out+=" ";map.push(i);} whitespace=true; }
+              else {out+=ch;map.push(i);whitespace=false;}
+            }
+            return {text:out.trim(),map};
+          };
+          const hay=normalizeWithMap(raw), needle=normalizeWithMap(target.text).text;
+          const at=needle ? hay.text.toLowerCase().indexOf(needle.toLowerCase()) : -1;
+          if(at>=0){
+            const rawStart=hay.map[at], rawEnd=hay.map[at+needle.length-1]+1;
+            const first=nodes.find(entry=>rawStart>=entry.start&&rawStart<entry.end);
+            const last=[...nodes].reverse().find(entry=>rawEnd>entry.start&&rawEnd<=entry.end);
+            if(first&&last){
+              const range=document.createRange();
+              range.setStart(first.node,rawStart-first.start);
+              range.setEnd(last.node,rawEnd-last.start);
+              Array.from(range.getClientRects()).forEach(rect=>{
+                const bounds=layer.getBoundingClientRect();
+                focusRects.push({left:rect.left-bounds.left,top:rect.top-bounds.top,width:rect.width,height:rect.height});
+              });
+            }
+          }
+        }
+        focusRects.forEach(rect=>{
           const focus=document.createElement("div");
           focus.className="source-jump-target";
-          const x=target.normalized?rect.x*layer.clientWidth:rect.x;
-          const y=target.normalized?rect.y*layer.clientHeight:rect.y;
-          const w=target.normalized?rect.w*layer.clientWidth:rect.w;
-          const h=target.normalized?rect.h*layer.clientHeight:rect.h;
-          Object.assign(focus.style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
+          Object.assign(focus.style,{left:rect.left+"px",top:rect.top+"px",width:rect.width+"px",height:rect.height+"px"});
           layer.appendChild(focus);
         });
-        window.setTimeout(()=>layer.querySelectorAll(".source-jump-target").forEach(node=>node.remove()),2600);
+        if(focusRects.length) window.setTimeout(()=>layer.querySelectorAll(".source-jump-target").forEach(node=>node.remove()),2600);
       }
       pendingAnnotationRef.current=null;
       setFocusedAnnotationId(target.id || "");
