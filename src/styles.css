@@ -403,3 +403,6 @@
 .note-entry-jump{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer}
 .note-entry-jump:hover span{color:var(--accent)}
 .note-entry-linked>p{white-space:pre-wrap}
+
+.highlight-note-link{display:inline-flex;align-items:center;margin-top:4px;padding:3px 0;border:0;background:none;color:var(--accent);font-size:10px;font-weight:700;cursor:pointer}
+.highlight-note-link:hover{text-decoration:underline}
