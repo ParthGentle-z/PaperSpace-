@@ -308,3 +308,52 @@
   color:transparent!important;
   text-shadow:none!important;
 }
+
+
+/* Library cards: the full surface is the primary open action; delete stays isolated. */
+.paper-card{
+  cursor:pointer;
+  position:relative;
+  transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease,background .16s ease;
+  outline:none;
+}
+.paper-card:hover{
+  border-color:var(--accent);
+  box-shadow:0 10px 28px rgba(70,55,130,.12);
+  transform:translateY(-2px);
+}
+.paper-card:focus-visible{
+  outline:3px solid color-mix(in srgb,var(--accent) 55%,transparent);
+  outline-offset:3px;
+  border-color:var(--accent);
+}
+.paper-card-delete{
+  position:relative;
+  z-index:2;
+  color:var(--soft);
+}
+.paper-card-delete:hover{
+  color:#c34d58;
+  background:rgba(195,77,88,.10);
+}
+.paper-card-bottom{
+  border-top:1px solid var(--line);
+  margin-top:16px;
+  padding-top:12px;
+  gap:10px;
+}
+.paper-card-open-label{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  color:var(--accent);
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.paper-card:hover .paper-card-open-label svg{transform:translateX(3px)}
+.paper-card-open-label svg{transition:transform .16s ease}
+@media(prefers-reduced-motion:reduce){
+  .paper-card,.paper-card-open-label svg{transition:none}
+  .paper-card:hover{transform:none}
+}
