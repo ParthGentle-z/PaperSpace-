@@ -104,6 +104,8 @@ function App() {
   const [driveMessage,setDriveMessage] = useState("");
   const [driveFolder,setDriveFolder] = useState(() => readJson("ps-drive-folder",null));
   const canvasHost = useRef(null);
+  const openingIdsRef = useRef(new Set());
+  const pdfLoadSequenceRef = useRef(0);
   const driveTokenRef = useRef(null);
   const toastTimer = useRef(null);
 
@@ -159,16 +161,23 @@ function App() {
 
   const openPaper = useCallback(async paper => {
     if (!paper) return;
+    if (activeId === paper.id && pdf) { setRoute("reader"); return; }
+    if (openingIdsRef.current.has(paper.id)) return;
+    openingIdsRef.current.add(paper.id);
+    const loadSequence = ++pdfLoadSequenceRef.current;
     addOpenId(paper.id);
     setPdf(null); setPdfError(""); setPage(1); setSelection(null);
     try {
       const loaded = await pdfjs.getDocument({data:await paper.blob.arrayBuffer()}).promise;
-      setPdf(loaded);
+      if (loadSequence === pdfLoadSequenceRef.current) setPdf(loaded);
+      else loaded.destroy?.();
     } catch (error) {
       console.error(error);
-      setPdfError("This PDF could not be opened. It may be damaged or stored in an unsupported format.");
+      if (loadSequence === pdfLoadSequenceRef.current) setPdfError("This PDF could not be opened. It may be damaged or stored in an unsupported format.");
+    } finally {
+      openingIdsRef.current.delete(paper.id);
     }
-  },[addOpenId]);
+  },[addOpenId,activeId,pdf,setRoute]);
 
   useEffect(() => {
     if (!db || view !== "reader" || !activeId || pdf) return;
