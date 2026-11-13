@@ -451,13 +451,9 @@ function App() {
     highlightClickTimerRef.current = window.setTimeout(() => {
       const linkedNotes = (active?.notes || []).filter(item => item.anchor &&
         (item.anchor.highlightId === highlight.id || (item.page === highlight.page && item.anchor.text === highlight.text)));
-      const bounds = mark.getBoundingClientRect();
-      const popupWidth=Math.min(560,window.innerWidth-32);
-      const popupHeight=Math.min(window.innerHeight*.72,520);
-      const x=Math.max(16,Math.min(bounds.left,window.innerWidth-popupWidth-16));
-      const below=window.innerHeight-bounds.bottom-20;
-      const y=below>=Math.min(popupHeight,260)?bounds.bottom+10:Math.max(16,bounds.top-popupHeight-10);
-      setAnnotationPopup({highlight,notes:linkedNotes,x,y});
+      // Render the annotation in a dedicated right-hand reading column.
+      // Keeping it out of the PDF canvas prevents it from covering the passage.
+      setAnnotationPopup({highlight,notes:linkedNotes});
     },240);
   },[readMode,active]);
 
@@ -995,7 +991,7 @@ function App() {
             <div className="reader-title-line"><span className="eyebrow">READING WORKSPACE</span><span className="reader-document-title" title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</span></div>
             <div className="reader-headline-actions"><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small" onClick={() => setRoute("library")}><FolderOpen size={14}/> Open paper</button></div>
           </div>
-          <div className="reader-layout">
+          <div className={"reader-layout "+(annotationPopup && readMode ? "annotation-open" : "")}>
             <section className="pdf-panel">
               <div className="pdf-toolbar">
                 <div className="toolbar-page">
@@ -1024,12 +1020,7 @@ function App() {
                   }));
                 }} onTouchEnd={() => requestAnimationFrame(captureSelection)} onContextMenu={handlePdfContextMenu}/>
               }
-              {annotationPopup && readMode && <div className="annotation-read-popover" style={{left:annotationPopup.x,top:annotationPopup.y}} onClick={event=>event.stopPropagation()}>
-                <div className="annotation-read-head"><span>YOUR ANNOTATION</span><button className="quiet-icon" aria-label="Close annotation" onClick={()=>setAnnotationPopup(null)}><X size={14}/></button></div>
-                <div className="annotation-read-quote">{annotationPopup.highlight.text}</div>
-                {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}><span>YOUR NOTE · {dateLabel(item.created)}</span><p>{item.text}</p></article>) : <p className="helper-copy">No note is linked to this highlight yet.</p>}
-                <button className="text-link" onClick={()=>{setAnnotationPopup(null);setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
-              </div>}
+              
               {contextMenu && <div className="selection-context-menu" role="menu" style={{left:contextMenu.x,top:contextMenu.y}} onMouseDown={event=>event.preventDefault()}>
                 <div className="selection-menu-label">SELECTED PASSAGE</div>
                 <p className="selection-menu-quote">{contextMenu.text}</p>
@@ -1050,6 +1041,12 @@ function App() {
                 <button className="selection-menu-dismiss" onClick={()=>setContextMenu(null)}>Cancel</button>
               </div>}
             </section>
+            {annotationPopup && readMode && <div className="annotation-read-popover" onClick={event=>event.stopPropagation()}>
+                <div className="annotation-read-head"><span>YOUR ANNOTATION</span><button className="quiet-icon" aria-label="Close annotation" onClick={()=>setAnnotationPopup(null)}><X size={14}/></button></div>
+                <div className="annotation-read-quote">{annotationPopup.highlight.text}</div>
+                {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}><span>YOUR NOTE · {dateLabel(item.created)}</span><p>{item.text}</p></article>) : <p className="helper-copy">No note is linked to this highlight yet.</p>}
+                <button className="text-link" onClick={()=>{setAnnotationPopup(null);setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
+              </div>}
             <aside className="reader-side">
               <div className="reader-side-tabs">
                 <button className={readerTab === "notes" ? "selected" : ""} onClick={() => setReaderTab("notes")}><NotebookPen size={14}/>Notes</button>
