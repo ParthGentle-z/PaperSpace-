@@ -191,8 +191,9 @@
  .drive-card>.button{margin-left:54px}
 }
 @media(max-width:420px){
- .reader-title-line .eyebrow{display:none}
- .reader-document-title{max-width:58vw;font-size:12px}
+ .reader-title-line{gap:5px}
+ .reader-title-line .eyebrow{display:inline;font-size:7px;letter-spacing:.45px}
+ .reader-document-title{max-width:54vw;font-size:11px}
  .reader-headline-actions .button{padding:5px 6px}
  .reader-headline-actions .button svg{display:none}
  .toolbar-page span{min-width:35px}
