@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen, Library, NotebookPen, Lightbulb, Search, Plus, Sun, Moon,
-  ChevronRight, ChevronLeft, X, ZoomIn, ZoomOut, Maximize2, FileText,
+  ChevronRight, ChevronLeft, ChevronUp, ChevronDown, X, ZoomIn, ZoomOut, Maximize2, FileText,
   Trash2, Download, HelpCircle, Sparkles, Menu, PanelLeftClose, PanelLeftOpen,
   FolderOpen, Cloud, Highlighter, MessageSquareText, RefreshCw, ExternalLink
 } from "lucide-react";
@@ -100,6 +100,7 @@ function App() {
   const [highlightColor,setHighlightColor] = useState("#ffe36b");
   const [readerTab,setReaderTab] = useState("notes");
   const [sidebarVisible,setSidebarVisible] = useState(() => localStorage.getItem("ps-sidebar") !== "hidden");
+  const [topbarVisible,setTopbarVisible] = useState(true);
   const [mobileSidebar,setMobileSidebar] = useState(false);
   const [dark,setDark] = useState(() => localStorage.getItem("ps-theme") !== "light");
   const [guide,setGuide] = useState(true);
@@ -672,7 +673,7 @@ function App() {
   const activeNotes = active?.notes || [];
 
   return (
-    <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(sidebarVisible ? "" : "sidebar-hidden")}>
+    <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(sidebarVisible ? "" : "sidebar-hidden")+(topbarVisible ? "" : " reader-topbar-collapsed")}>
       {sidebarVisible && <aside className={"sidebar "+(mobileSidebar ? "mobile-open" : "")}>
         <div className="brand"><span className="brand-mark">P</span><span className="brand-name">PaperSpace</span><span className="brand-beta">RESEARCH DESK</span></div>
         <nav className="nav-list">
@@ -698,20 +699,25 @@ function App() {
       {mobileSidebar && sidebarVisible && <button className="sidebar-scrim" onClick={() => setMobileSidebar(false)} aria-label="Close navigation"/>}
 
       <main className="main-area">
-        <header className="topbar">
+        {topbarVisible ? <header className="topbar">
           <div className="topbar-left">
-            <button className="icon-btn sidebar-toggle" title={sidebarVisible ? "Hide menu" : "Show menu"}
-              onClick={() => { if (window.matchMedia("(max-width: 820px)").matches) { if (!sidebarVisible) { setSidebarVisible(true); setMobileSidebar(true); } else setMobileSidebar(v=>!v); } else { setSidebarVisible(v=>!v); } }}>
+            <button className="icon-btn sidebar-toggle" title={sidebarVisible ? "Hide menu and compact header" : "Show menu"}
+              onClick={() => { if (window.matchMedia("(max-width: 820px)").matches) { if (!sidebarVisible) { setSidebarVisible(true); setMobileSidebar(true); } else setMobileSidebar(v=>!v); } else { const next=!sidebarVisible; setSidebarVisible(next); setTopbarVisible(next); } }}>
               {sidebarVisible ? <PanelLeftClose size={17}/> : <Menu size={17}/>}
             </button>
             <div className="breadcrumb"><span>WORKSPACE</span><b>/</b><strong>{view === "reader" ? "Reading" : view === "library" ? "Library" : view === "notes" ? "Research notes" : "Concept desk"}</strong></div>
           </div>
           <div className="top-actions">
             <button className="icon-btn theme-toggle" onClick={() => setDark(v=>!v)}>{dark ? <Sun size={16}/> : <Moon size={16}/>}<span>{dark ? "Light mode" : "Dark mode"}</span></button>
-            <button className="button button-primary" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={16}/><span>Add paper</span></button>
-            <input id="paper-upload" hidden type="file" accept="application/pdf,.pdf" multiple onChange={e => { addLocalFiles(e.target.files); e.target.value=""; }}/>
+            {view !== "reader" && <button className="button button-primary" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={16}/><span>Add paper</span></button>}
+            {view === "reader" && <button className="icon-btn topbar-collapse" title="Hide top bar" aria-label="Hide top bar" onClick={() => setTopbarVisible(false)}><ChevronUp size={17}/></button>}
           </div>
-        </header>
+        </header> : view === "reader" ? <div className="reader-compact-bar">
+          <button className="icon-btn compact-sidebar-toggle" title="Show navigation" aria-label="Show navigation" onClick={() => {setSidebarVisible(true);setTopbarVisible(true);setMobileSidebar(window.matchMedia("(max-width: 820px)").matches);}}><PanelLeftOpen size={16}/></button>
+          <div className="reader-compact-title"><span>READING WORKSPACE</span><strong title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</strong></div>
+          <button className="icon-btn compact-expand" title="Show full header" aria-label="Show full header" onClick={() => setTopbarVisible(true)}><ChevronDown size={17}/></button>
+        </div> : null}
+        <input id="paper-upload" hidden type="file" accept="application/pdf,.pdf" multiple onChange={e => { addLocalFiles(e.target.files); e.target.value=""; }}/>
 
         {view === "library" && <div className="content library-content">
           <section className="page-heading">
@@ -772,7 +778,7 @@ function App() {
         {view === "reader" && <div className="reader-content">
           <div className="reader-headline">
             <div className="reader-title-line"><span className="eyebrow">READING WORKSPACE</span><span className="reader-document-title" title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</span></div>
-            <div className="reader-headline-actions"><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small" onClick={() => setRoute("library")}><X size={14}/> Library</button></div>
+            <div className="reader-headline-actions"><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small" onClick={() => setRoute("library")}><FolderOpen size={14}/> Open paper</button><button className="button button-primary button-small" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={14}/> Add paper</button></div>
           </div>
           <div className="reader-layout">
             <section className="pdf-panel">
