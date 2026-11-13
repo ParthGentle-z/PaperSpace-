@@ -96,6 +96,12 @@ function App() {
   const [selectedConcept,setSelectedConcept] = useState(concepts[0]);
   const [note,setNote] = useState("");
   const [noteAnchor,setNoteAnchor] = useState(null);
+  const [readMode,setReadMode] = useState(() => localStorage.getItem("ps-read-mode") === "on");
+  const [annotationPopup,setAnnotationPopup] = useState(null);
+  const [focusedAnnotationId,setFocusedAnnotationId] = useState("");
+  const [annotationSearch,setAnnotationSearch] = useState("");
+  const [annotationFilter,setAnnotationFilter] = useState("all");
+  const [expandedPaperIds,setExpandedPaperIds] = useState(() => readJson("ps-expanded-note-papers",[]));
   const [selection,setSelection] = useState(null);
   const [contextMenu,setContextMenu] = useState(null);
   const [highlightColor,setHighlightColor] = useState("#ffe36b");
@@ -119,6 +125,8 @@ function App() {
   const pdfLoadSequenceRef = useRef(0);
   const driveTokenRef = useRef(null);
   const toastTimer = useRef(null);
+  const pendingAnnotationRef = useRef(null);
+  const highlightClickTimerRef = useRef(null);
 
   const active = papers.find(p => p.id === activeId) || null;
   activeHighlightsRef.current = active?.highlights || [];
@@ -148,6 +156,8 @@ function App() {
   useEffect(() => { localStorage.setItem("ps-open-paper-ids",JSON.stringify(openIds)); },[openIds]);
   useEffect(() => { if (activeId) localStorage.setItem("ps-active-paper-id",activeId); else localStorage.removeItem("ps-active-paper-id"); },[activeId]);
   useEffect(() => { localStorage.setItem("ps-sidebar",sidebarVisible ? "visible" : "hidden"); },[sidebarVisible]);
+  useEffect(() => { localStorage.setItem("ps-read-mode",readMode ? "on" : "off"); },[readMode]);
+  useEffect(() => { localStorage.setItem("ps-expanded-note-papers",JSON.stringify(expandedPaperIds)); },[expandedPaperIds]);
   useEffect(() => { localStorage.setItem("ps-drive-folder",JSON.stringify(driveFolder)); },[driveFolder]);
 
   const setRoute = useCallback((route,replace=false) => {
@@ -232,7 +242,7 @@ function App() {
       text:note.trim(),
       created:Date.now(),
       type:noteAnchor ? "passage" : "page",
-      anchor:noteAnchor ? {text:noteAnchor.text,rects:noteAnchor.rects || [],normalized:!!noteAnchor.normalized,selectionVersion:noteAnchor.selectionVersion || 4} : null
+      anchor:noteAnchor ? {text:noteAnchor.text,rects:noteAnchor.rects || [],normalized:!!noteAnchor.normalized,selectionVersion:noteAnchor.selectionVersion || 4,highlightId:noteAnchor.highlightId || null} : null
     };
     const updated = {...active,notes:[...(active.notes || []),noteItem]};
     await dbPut(db,updated); setPapers(items => items.map(item => item.id === updated.id ? updated : item));
@@ -407,6 +417,88 @@ function App() {
     setPage(target);
   },[]);
 
+  const openAnnotation = useCallback((paperId, annotation, kind="highlight") => {
+    if (!paperId || !annotation) return;
+    pendingAnnotationRef.current = {
+      paperId, page:annotation.page,
+      rects:annotation.rects || annotation.anchor?.rects || [],
+      normalized:annotation.normalized ?? annotation.anchor?.normalized ?? true,
+      id:kind === "highlight" ? annotation.id : (annotation.anchor?.highlightId || annotation.id)
+    };
+    setFocusedAnnotationId(kind === "highlight" ? annotation.id : (annotation.anchor?.highlightId || annotation.id));
+    setAnnotationPopup(null);
+    setRoute("reader");
+    const paper = papers.find(item => item.id === paperId);
+    if (paper && (activeId !== paperId || !pdf)) openPaper(paper);
+    else if (annotation.page) setPage(annotation.page);
+  },[papers,activeId,pdf,openPaper,setRoute]);
+
+  const handleSavedHighlightClick = useCallback(event => {
+    if (!readMode) return;
+    const mark = event.target.closest?.(".saved-highlight");
+    if (!mark) return;
+    const highlight = activeHighlightsRef.current.find(item => item.id === mark.dataset.annotationId);
+    if (!highlight) return;
+    event.preventDefault(); event.stopPropagation();
+    if (highlightClickTimerRef.current) window.clearTimeout(highlightClickTimerRef.current);
+    highlightClickTimerRef.current = window.setTimeout(() => {
+      const linkedNotes = (active?.notes || []).filter(item => item.anchor &&
+        (item.anchor.highlightId === highlight.id || (item.page === highlight.page && item.anchor.text === highlight.text)));
+      const bounds = mark.getBoundingClientRect();
+      setAnnotationPopup({highlight,notes:linkedNotes,
+        x:Math.max(12,Math.min(bounds.left,window.innerWidth-330)),
+        y:Math.max(12,Math.min(bounds.bottom+8,window.innerHeight-260))});
+    },240);
+  },[readMode,active]);
+
+  const handleSavedHighlightDoubleClick = useCallback(event => {
+    if (!readMode) return;
+    const mark = event.target.closest?.(".saved-highlight");
+    if (!mark) return;
+    const highlight = activeHighlightsRef.current.find(item => item.id === mark.dataset.annotationId);
+    if (!highlight) return;
+    event.preventDefault(); event.stopPropagation();
+    if (highlightClickTimerRef.current) window.clearTimeout(highlightClickTimerRef.current);
+    setAnnotationPopup(null);
+    setFocusedAnnotationId(highlight.id);
+    setRoute("notes");
+  },[readMode,setRoute]);
+
+  useEffect(() => {
+    if (view !== "reader" || !pdf || !pendingAnnotationRef.current || !canvasHost.current) return;
+    const target = pendingAnnotationRef.current;
+    if (target.paperId !== activeId) return;
+    let cancelled = false, attempts = 0;
+    const locate = () => {
+      if (cancelled) return;
+      const root = canvasHost.current;
+      const sheet = root?.querySelector('[data-page="'+target.page+'"]');
+      if (!sheet) return;
+      sheet.scrollIntoView({behavior:"smooth",block:"start"});
+      setPage(target.page);
+      const rect = target.rects?.[0];
+      if (rect) {
+        const y = target.normalized ? rect.y * sheet.clientHeight : rect.y;
+        root.scrollTo({top:Math.max(0,sheet.offsetTop+y-90),behavior:"smooth"});
+      }
+      setFocusedAnnotationId(target.id || "");
+      pendingAnnotationRef.current = null;
+    };
+    const frame = () => {
+      if (cancelled) return;
+      locate();
+      if (pendingAnnotationRef.current && attempts++ < 30) requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+    return () => {cancelled=true;};
+  },[view,pdf,activeId]);
+
+  useEffect(() => {
+    if (view !== "notes" || !focusedAnnotationId) return;
+    const frame = requestAnimationFrame(() => document.getElementById("annotation-"+focusedAnnotationId)?.scrollIntoView({behavior:"smooth",block:"center"}));
+    return () => cancelAnimationFrame(frame);
+  },[view,focusedAnnotationId]);
+
   // Render PDF pages on demand. Creating every full-resolution canvas at once can
   // exhaust browser memory and is the main cause of intermittent blank readers.
   // Page shells remain in the scroll flow; only visible/near-visible pages get canvases.
@@ -437,6 +529,11 @@ function App() {
         for (const rect of highlight.rects || []) {
           const mark = document.createElement("div");
           mark.className = "saved-highlight";
+          mark.dataset.annotationId = highlight.id;
+          mark.dataset.page = String(highlight.page);
+          mark.setAttribute("role","button");
+          mark.setAttribute("aria-label","Saved highlight: "+(highlight.text || "").slice(0,100));
+          mark.tabIndex = readMode ? 0 : -1;
           mark.style.background = highlight.color || "#ffe36b";
           const x = highlight.normalized ? rect.x * viewport.width : rect.x;
           const y = highlight.normalized ? rect.y * viewport.height : rect.y;
@@ -600,7 +697,7 @@ function App() {
       cancelTasks();
       root.removeEventListener("scroll",onScroll);
     };
-  },[view,pdf,zoom,fit,activeId]);
+  },[view,pdf,zoom,fit,activeId,readMode]);
 
   // Annotation updates must never rebuild the PDF page tree. Repaint only the
   // lightweight overlay rectangles, leaving canvases, text layers and scroll
@@ -717,7 +814,7 @@ function App() {
   const activeNotes = active?.notes || [];
 
   return (
-    <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(sidebarVisible ? "" : "sidebar-hidden")+(topbarVisible ? "" : " reader-topbar-collapsed")}>
+    <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(readMode && view === "reader" ? "read-mode-active " : "")+(sidebarVisible ? "" : "sidebar-hidden")+(topbarVisible ? "" : " reader-topbar-collapsed")}>
       {sidebarVisible && <aside className={"sidebar "+(mobileSidebar ? "mobile-open" : "")}>
         <div className="brand"><span className="brand-mark">P</span><span className="brand-name">PaperSpace</span><span className="brand-beta">RESEARCH DESK</span></div>
         <button className="sidebar-add-paper" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={15}/> Add paper</button>
@@ -833,6 +930,7 @@ function App() {
                   <button className="icon-btn" disabled={!pdf || page >= pdf.numPages} onClick={() => scrollToPage(Math.min(pdf?.numPages || page,page+1))}><ChevronRight size={17}/></button>
                 </div>
                 <div className="toolbar-tools">
+                  <button className={"tool-btn read-mode-toggle "+(readMode ? "selected" : "")} aria-pressed={readMode} onClick={() => {setReadMode(value=>!value);setAnnotationPopup(null);}} title="Toggle interactive annotation reading"><BookOpen size={14}/> {readMode ? "Read mode on" : "Read mode"}</button>
                   <button className={"tool-btn "+(fit ? "selected" : "")} onClick={() => setFit(true)}><Maximize2 size={14}/> Fit width</button>
                   <button className="icon-btn" disabled={!pdf} onClick={() => {setFit(false);setZoom(value=>Math.max(.55,value-.15));}} title="Zoom out"><ZoomOut size={16}/></button>
                   <span className="zoom-value">{fit ? "Fit" : Math.round(zoom*100)+"%"}</span>
@@ -841,7 +939,7 @@ function App() {
                 </div>
               </div>
               {pdfError ? <div className="reader-error">{pdfError}</div> : !pdf ? <div className="reader-empty"><FileText size={34}/><h2>{pdfLoading ? "Loading your paper…" : "Open a paper to read"}</h2><p>{pdfLoading ? "Preparing the PDF pages. Large documents may take a moment." : "Choose a file from Open papers on the left, or return to the Library to add one."}</p>{!pdfLoading && <button className="button button-primary" onClick={() => setRoute("library")}>Go to library</button>}</div> :
-                <div className="pdf-page-host" ref={canvasHost} onMouseUp={event => {
+                <div className="pdf-page-host" ref={canvasHost} onClick={handleSavedHighlightClick} onDoubleClick={handleSavedHighlightDoubleClick} onMouseUp={event => {
                   if (event.button !== 0) return;
                   setContextMenu(null);
                   // Chromium can dispatch mouseup before its final selection range
@@ -852,6 +950,12 @@ function App() {
                   }));
                 }} onTouchEnd={() => requestAnimationFrame(captureSelection)} onContextMenu={handlePdfContextMenu}/>
               }
+              {annotationPopup && readMode && <div className="annotation-read-popover" style={{left:annotationPopup.x,top:annotationPopup.y}} onClick={event=>event.stopPropagation()}>
+                <div className="annotation-read-head"><span>YOUR ANNOTATION</span><button className="quiet-icon" aria-label="Close annotation" onClick={()=>setAnnotationPopup(null)}><X size={14}/></button></div>
+                <div className="annotation-read-quote">{annotationPopup.highlight.text}</div>
+                {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}><span>YOUR NOTE · {dateLabel(item.created)}</span><p>{item.text}</p></article>) : <p className="helper-copy">No note is linked to this highlight yet.</p>}
+                <button className="text-link" onClick={()=>{setAnnotationPopup(null);setFocusedAnnotationId(annotationPopup.highlight.id);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
+              </div>}
               {contextMenu && <div className="selection-context-menu" role="menu" style={{left:contextMenu.x,top:contextMenu.y}} onMouseDown={event=>event.preventDefault()}>
                 <div className="selection-menu-label">SELECTED PASSAGE</div>
                 <p className="selection-menu-quote">{contextMenu.text}</p>
@@ -887,7 +991,7 @@ function App() {
               </div>}
               {readerTab === "highlights" && <div className="reader-side-scroll">
                 <section className="side-card"><div className="card-eyebrow">ANNOTATIONS</div><h3>{activeHighlights.length} saved highlights</h3><p className="helper-copy">Select text, right-click it, then choose a colour. Remove any highlight individually here, or use Undo last in the reader toolbar.</p>
-                  {activeHighlights.length ? [...activeHighlights].sort((a,b)=>b.created-a.created).map(item=><article className="highlight-entry" key={item.id}><div><span>{(item.category || "GENERAL").toUpperCase()} · PAGE {item.page}</span><p>{item.text}</p><button className="highlight-note-link" onClick={()=>{setNoteAnchor({text:item.text,page:item.page,rects:item.rects || [],normalized:!!item.normalized,selectionVersion:item.selectionVersion || 4});setNote("");setReaderTab("notes");}}>Add linked note</button></div><button className="quiet-icon" title="Remove this highlight" onClick={() => removeHighlight(item.id)}><Trash2 size={15}/></button></article>) : <p className="helper-copy">No highlights saved for this paper yet.</p>}
+                  {activeHighlights.length ? [...activeHighlights].sort((a,b)=>b.created-a.created).map(item=><article className="highlight-entry" key={item.id}><div><span>{(item.category || "GENERAL").toUpperCase()} · PAGE {item.page}</span><p>{item.text}</p><button className="highlight-note-link" onClick={()=>{setNoteAnchor({text:item.text,page:item.page,rects:item.rects || [],normalized:!!item.normalized,selectionVersion:item.selectionVersion || 4,highlightId:item.id});setNote("");setReaderTab("notes");}}>Add linked note</button></div><button className="quiet-icon" title="Remove this highlight" onClick={() => removeHighlight(item.id)}><Trash2 size={15}/></button></article>) : <p className="helper-copy">No highlights saved for this paper yet.</p>}
                 </section>
               </div>}
               {readerTab === "ai" && <div className="reader-side-scroll">
