@@ -252,10 +252,14 @@ function App() {
     if (!layer) return;
     const origin = layer.getBoundingClientRect();
     const sheetBounds = sheet.getBoundingClientRect();
-    const rects = Array.from(range.getClientRects()).map(rect => ({
+    const rects = Array.from(range.getClientRects()).filter(rect =>
+      rect.width > 0 && rect.height > 0 &&
+      rect.right > sheetBounds.left && rect.left < sheetBounds.right &&
+      rect.bottom > sheetBounds.top && rect.top < sheetBounds.bottom
+    ).map(rect => ({
       x:(rect.left-origin.left)/origin.width, y:(rect.top-origin.top)/origin.height,
       w:rect.width/origin.width, h:rect.height/origin.height
-    })).filter(rect => rect.w > 0 && rect.h > 0 && rect.left >= sheetBounds.left && rect.right <= sheetBounds.right + 1);
+    }));
     if (rects.length) setSelection({text,page:Number(sheet.dataset.page),rects,normalized:true});
   },[]);
 
@@ -265,156 +269,169 @@ function App() {
     setPage(target);
   },[]);
 
-  // Render pages concurrently into stable page shells. A generation token prevents stale
-  // resize/zoom renders from replacing the currently selected document.
+  // Render PDF pages on demand. Creating every full-resolution canvas at once can
+  // exhaust browser memory and is the main cause of intermittent blank readers.
+  // Page shells remain in the scroll flow; only visible/near-visible pages get canvases.
   useEffect(() => {
     if (!pdf || !canvasHost.current) return;
     let cancelled = false;
-    let generation = 0;
     let resizeTimer = 0;
-    const tasks = new Set();
+    let generation = 0;
     const root = canvasHost.current;
+    const renderTasks = new Map();
+    const rendered = new Set();
+    let intersectionObserver;
 
-    const render = async () => {
-      const current = ++generation;
-      tasks.forEach(task => { try { task.cancel(); } catch {} });
-      tasks.clear();
-      const oldScrollTop = root.scrollTop;
-      root.replaceChildren();
-      setPdfError("");
-
-      const availableWidth = Math.max(280, root.clientWidth - 36);
-      const ratio = Math.min(window.devicePixelRatio || 1, 2.5);
-      const pages = [];
-
-      // Create all page shells first so the reader has a stable, scrollable document.
-      for (let number = 1; number <= pdf.numPages; number++) {
-        const shell = document.createElement("article");
-        shell.className = "pdf-sheet pdf-sheet-loading";
-        shell.dataset.page = String(number);
-        const canvas = document.createElement("canvas");
-        const layer = document.createElement("div");
-        layer.className = "pdf-text-layer";
-        shell.append(canvas, layer);
-        root.appendChild(shell);
-        pages.push({number, shell, canvas, layer});
+    const cancelTasks = () => {
+      for (const task of renderTasks.values()) {
+        try { task.cancel(); } catch {}
       }
+      renderTasks.clear();
+    };
 
-      let nextIndex = 0;
-      const renderWorker = async () => {
-        while (!cancelled && current === generation && nextIndex < pages.length) {
-          const entry = pages[nextIndex++];
-          try {
-            const pdfPage = await pdf.getPage(entry.number);
-            if (cancelled || current !== generation) return;
-            const baseViewport = pdfPage.getViewport({scale:1});
-            const scale = fit ? Math.min(2.5, availableWidth / baseViewport.width) : zoom;
-            const viewport = pdfPage.getViewport({scale});
-            const canvas = entry.canvas;
-            const context = canvas.getContext("2d", {alpha:false});
-            if (!context) throw new Error("Canvas rendering is unavailable in this browser.");
-            canvas.width = Math.floor(viewport.width * ratio);
-            canvas.height = Math.floor(viewport.height * ratio);
-            canvas.style.width = viewport.width + "px";
-            canvas.style.height = viewport.height + "px";
-            entry.shell.style.width = viewport.width + "px";
-            entry.shell.style.height = viewport.height + "px";
-            entry.layer.style.width = viewport.width + "px";
-            entry.layer.style.height = viewport.height + "px";
-            const task = pdfPage.render({canvasContext:context,viewport,transform:[ratio,0,0,ratio,0,0],background:"#ffffff"});
-            tasks.add(task);
-            await task.promise;
-            tasks.delete(task);
-            if (cancelled || current !== generation) return;
-
-            const textContent = await pdfPage.getTextContent();
-            if (cancelled || current !== generation) return;
-            const measure = document.createElement("canvas").getContext("2d");
-            const fragment = document.createDocumentFragment();
-            for (const item of textContent.items) {
-              if (!item.str || !item.transform || typeof item.width !== "number") continue;
-              const transform = pdfjs.Util.transform(viewport.transform,item.transform);
-              const fontHeight = Math.max(1,Math.hypot(transform[2],transform[3]));
-              const angle = Math.atan2(transform[1],transform[0]);
-              const span = document.createElement("span");
-              span.textContent = item.str;
-              span.style.left = transform[4] + "px";
-              span.style.top = (transform[5] - fontHeight) + "px";
-              span.style.fontSize = fontHeight + "px";
-              span.style.fontFamily = "sans-serif";
-              measure.font = fontHeight + "px sans-serif";
-              const naturalWidth = Math.max(1,measure.measureText(item.str).width);
-              const targetWidth = Math.max(0,item.width * scale);
-              span.style.transform = "rotate(" + angle + "rad) scaleX(" + Math.max(.01,targetWidth/naturalWidth) + ")";
-              span.style.transformOrigin = "left top";
-              fragment.appendChild(span);
-            }
-            entry.layer.appendChild(fragment);
-
-            for (const highlight of (active?.highlights || []).filter(item => item.page === entry.number)) {
-              for (const rect of highlight.rects || []) {
-                const mark = document.createElement("div");
-                mark.className = "saved-highlight";
-                mark.style.background = highlight.color || "#ffe36b";
-                const x = highlight.normalized ? rect.x * viewport.width : rect.x;
-                const y = highlight.normalized ? rect.y * viewport.height : rect.y;
-                const w = highlight.normalized ? rect.w * viewport.width : rect.w;
-                const h = highlight.normalized ? rect.h * viewport.height : rect.h;
-                Object.assign(mark.style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
-                entry.layer.appendChild(mark);
-              }
-            }
-            entry.shell.classList.remove("pdf-sheet-loading");
-          } catch (error) {
-            if (error?.name === "RenderingCancelledException" || cancelled || current !== generation) return;
-            console.error("PDF page render error",entry.number,error);
-            entry.shell.classList.add("pdf-sheet-error");
-            entry.shell.textContent = "Page " + entry.number + " could not be rendered. Try reopening this paper.";
-            throw error;
-          }
-        }
-      };
-
-      try {
-        await Promise.all(Array.from({length:Math.min(3,pages.length)},() => renderWorker()));
-        if (!cancelled && current === generation) root.scrollTop = oldScrollTop;
-      } catch (error) {
-        if (!cancelled && current === generation && error?.name !== "RenderingCancelledException") {
-          console.error("PDF render error",error);
-          setPdfError("Some pages could not be rendered. Reopen the paper or try another PDF.");
+    const paintHighlights = (entry, viewport) => {
+      for (const highlight of (active?.highlights || []).filter(item => item.page === entry.number)) {
+        for (const rect of highlight.rects || []) {
+          const mark = document.createElement("div");
+          mark.className = "saved-highlight";
+          mark.style.background = highlight.color || "#ffe36b";
+          const x = highlight.normalized ? rect.x * viewport.width : rect.x;
+          const y = highlight.normalized ? rect.y * viewport.height : rect.y;
+          const w = highlight.normalized ? rect.w * viewport.width : rect.w;
+          const h = highlight.normalized ? rect.h * viewport.height : rect.h;
+          Object.assign(mark.style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
+          entry.layer.appendChild(mark);
         }
       }
     };
 
-    const observer = new ResizeObserver(() => {
-      window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => { if (!cancelled) render(); },180);
-    });
-    observer.observe(root);
-    render();
+    const renderEntry = async (entry, currentGeneration) => {
+      if (cancelled || currentGeneration !== generation || rendered.has(entry.number)) return;
+      rendered.add(entry.number);
+      try {
+        const pdfPage = await pdf.getPage(entry.number);
+        if (cancelled || currentGeneration !== generation) return;
+        const availableWidth = Math.max(240, root.clientWidth - 32);
+        const baseViewport = pdfPage.getViewport({scale:1});
+        const scale = fit ? Math.min(2.5, availableWidth / baseViewport.width) : zoom;
+        const viewport = pdfPage.getViewport({scale});
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d", {alpha:false});
+        if (!context) throw new Error("Canvas rendering is unavailable in this browser.");
+        canvas.width = Math.ceil(viewport.width * ratio);
+        canvas.height = Math.ceil(viewport.height * ratio);
+        canvas.style.width = viewport.width + "px";
+        canvas.style.height = viewport.height + "px";
+        entry.shell.style.width = viewport.width + "px";
+        entry.shell.style.height = viewport.height + "px";
+        entry.layer.style.width = viewport.width + "px";
+        entry.layer.style.height = viewport.height + "px";
+        entry.shell.replaceChildren(canvas,entry.layer);
+        const task = pdfPage.render({
+          canvasContext:context,viewport,
+          transform:ratio === 1 ? null : [ratio,0,0,ratio,0,0],
+          background:"#ffffff"
+        });
+        renderTasks.set(entry.number,task);
+        await task.promise;
+        renderTasks.delete(entry.number);
+        if (cancelled || currentGeneration !== generation) return;
 
-    const onScroll = () => {
-      const sheets = Array.from(root.querySelectorAll(".pdf-sheet"));
+        const textContent = await pdfPage.getTextContent();
+        if (cancelled || currentGeneration !== generation) return;
+        entry.layer.className = "pdf-text-layer textLayer";
+        const textLayer = new pdfjs.TextLayer({
+          textContentSource:textContent,
+          container:entry.layer,
+          viewport
+        });
+        await textLayer.render();
+        if (cancelled || currentGeneration !== generation) return;
+        paintHighlights(entry,viewport);
+        entry.shell.classList.remove("pdf-sheet-loading","pdf-sheet-error");
+        pdfPage.cleanup?.();
+      } catch (error) {
+        renderTasks.delete(entry.number);
+        if (error?.name === "RenderingCancelledException" || cancelled || currentGeneration !== generation) return;
+        rendered.delete(entry.number);
+        console.error("PDF page render error",entry.number,error);
+        entry.shell.classList.add("pdf-sheet-error");
+        entry.shell.replaceChildren();
+        const message = document.createElement("p");
+        message.className = "pdf-page-error-message";
+        message.textContent = "Page " + entry.number + " could not be rendered. Scroll away and back to retry, or reopen the paper.";
+        entry.shell.appendChild(message);
+      }
+    };
+
+    const buildDocument = () => {
+      generation++;
+      const currentGeneration = generation;
+      cancelTasks();
+      rendered.clear();
+      if (intersectionObserver) intersectionObserver.disconnect();
+      const oldScrollTop = root.scrollTop;
+      root.replaceChildren();
+      const availableWidth = Math.max(240,root.clientWidth - 32);
+      const entries = [];
+      for (let number=1; number<=pdf.numPages; number++) {
+        const shell=document.createElement("article");
+        shell.className="pdf-sheet pdf-sheet-loading";
+        shell.dataset.page=String(number);
+        const layer=document.createElement("div");
+        layer.className="pdf-text-layer textLayer";
+        const baseWidth=pdf.getPage ? null : null;
+        shell.style.width=availableWidth+"px";
+        shell.style.minHeight=Math.max(320,availableWidth*1.25)+"px";
+        const placeholder=document.createElement("div");
+        placeholder.className="pdf-page-placeholder";
+        placeholder.textContent="Loading page "+number+"…";
+        shell.append(placeholder,layer);
+        root.appendChild(shell);
+        entries.push({number,shell,layer});
+      }
+      intersectionObserver = new IntersectionObserver(observations => {
+        for (const observation of observations) {
+          if (!observation.isIntersecting) continue;
+          const entry=entries[Number(observation.target.dataset.page)-1];
+          if (entry) renderEntry(entry,currentGeneration);
+          intersectionObserver.unobserve(observation.target);
+        }
+      },{root,rootMargin:"1000px 0px",threshold:0});
+      entries.forEach(entry=>intersectionObserver.observe(entry.shell));
+      requestAnimationFrame(()=>{ if (!cancelled && currentGeneration===generation) root.scrollTop=oldScrollTop; });
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer=window.setTimeout(buildDocument,220);
+    });
+    resizeObserver.observe(root);
+    buildDocument();
+
+    const onScroll=()=>{
+      const sheets=Array.from(root.querySelectorAll(".pdf-sheet"));
       if (!sheets.length) return;
-      const line = root.getBoundingClientRect().top + 34;
-      let nearest = sheets[0], distance = Infinity;
+      const line=root.getBoundingClientRect().top+36;
+      let nearest=sheets[0],distance=Infinity;
       for (const sheet of sheets) {
-        const d = Math.abs(sheet.getBoundingClientRect().top - line);
-        if (d < distance) { nearest = sheet; distance = d; }
+        const d=Math.abs(sheet.getBoundingClientRect().top-line);
+        if (d<distance) {nearest=sheet;distance=d;}
       }
       setPage(Number(nearest.dataset.page));
     };
     root.addEventListener("scroll",onScroll,{passive:true});
-    return () => {
-      cancelled = true;
-      window.clearTimeout(resizeTimer);
-      observer.disconnect();
+    return ()=>{
+      cancelled=true;
       generation++;
-      tasks.forEach(task => { try { task.cancel(); } catch {} });
-      tasks.clear();
+      window.clearTimeout(resizeTimer);
+      resizeObserver.disconnect();
+      intersectionObserver?.disconnect();
+      cancelTasks();
       root.removeEventListener("scroll",onScroll);
     };
-  },[pdf,zoom,fit,activeId,active?.highlights?.map(item => item.id + ":" + (item.color || "")).join(",")]);
+  },[pdf,zoom,fit,activeId,active?.highlights?.map(item=>item.id+":"+(item.color||"")).join(",")]);
 
   const addLocalFiles = useCallback(async files => {
     if (!db) return;
