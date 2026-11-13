@@ -96,7 +96,6 @@ function App() {
   const [selection,setSelection] = useState(null);
   const [readerTab,setReaderTab] = useState("notes");
   const [sidebarVisible,setSidebarVisible] = useState(() => localStorage.getItem("ps-sidebar") !== "hidden");
-  const [sidebarCollapsed,setSidebarCollapsed] = useState(() => localStorage.getItem("ps-sidebar-collapsed") === "true");
   const [mobileSidebar,setMobileSidebar] = useState(false);
   const [dark,setDark] = useState(() => localStorage.getItem("ps-theme") !== "light");
   const [guide,setGuide] = useState(true);
@@ -135,7 +134,6 @@ function App() {
   useEffect(() => { localStorage.setItem("ps-open-paper-ids",JSON.stringify(openIds)); },[openIds]);
   useEffect(() => { if (activeId) localStorage.setItem("ps-active-paper-id",activeId); else localStorage.removeItem("ps-active-paper-id"); },[activeId]);
   useEffect(() => { localStorage.setItem("ps-sidebar",sidebarVisible ? "visible" : "hidden"); },[sidebarVisible]);
-  useEffect(() => { localStorage.setItem("ps-sidebar-collapsed",String(sidebarCollapsed)); },[sidebarCollapsed]);
   useEffect(() => { localStorage.setItem("ps-drive-folder",JSON.stringify(driveFolder)); },[driveFolder]);
 
   const setRoute = useCallback((route,replace=false) => {
@@ -447,7 +445,7 @@ function App() {
   const activeNotes = active?.notes || [];
 
   return (
-    <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(sidebarVisible ? "" : "sidebar-hidden")+(sidebarCollapsed ? " sidebar-collapsed" : "")}>
+    <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(sidebarVisible ? "" : "sidebar-hidden")}>
       {sidebarVisible && <aside className={"sidebar "+(mobileSidebar ? "mobile-open" : "")}>
         <div className="brand"><span className="brand-mark">P</span><span className="brand-name">PaperSpace</span><span className="brand-beta">RESEARCH DESK</span></div>
         <nav className="nav-list">
@@ -477,7 +475,7 @@ function App() {
           <div className="topbar-left">
             <button className="icon-btn sidebar-toggle" title={sidebarVisible ? (sidebarCollapsed ? "Expand menu" : "Hide menu") : "Show menu"}
               onClick={() => { if (window.matchMedia("(max-width: 820px)").matches) { if (!sidebarVisible) { setSidebarVisible(true); setMobileSidebar(true); } else setMobileSidebar(v=>!v); } else { setSidebarVisible(v=>!v); } }}>
-              {sidebarVisible ? (sidebarCollapsed ? <PanelLeftOpen size={17}/> : <PanelLeftClose size={17}/>) : <Menu size={17}/>}
+              {sidebarVisible ? <PanelLeftClose size={17}/> : <Menu size={17}/>}
             </button>
             <div className="breadcrumb"><span>WORKSPACE</span><b>/</b><strong>{view === "reader" ? "Reading" : view === "library" ? "Library" : view === "notes" ? "Research notes" : "Concept desk"}</strong></div>
           </div>
