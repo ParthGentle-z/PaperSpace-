@@ -1024,3 +1024,34 @@
     flex:0 0 auto;
   }
 }
+
+
+/* Keep note actions visible while the note list scrolls. */
+.reader-layout.annotation-open .annotation-note-list{
+  position:relative;
+  scroll-padding-top:58px;
+}
+.reader-layout.annotation-open .annotation-read-note{
+  position:relative;
+  overflow:visible;
+}
+.reader-layout.annotation-open .annotation-note-meta{
+  position:sticky;
+  top:0;
+  z-index:4;
+  min-height:30px;
+  padding:5px 0 9px;
+  margin:0 0 2px;
+  background:var(--surface2);
+  border-bottom:1px solid var(--line);
+}
+.reader-layout.annotation-open .annotation-note-actions{
+  position:relative;
+  z-index:5;
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+.reader-layout.annotation-open .annotation-note-actions .annotation-edit-button{
+  min-height:28px;
+  padding:5px 2px;
+}
