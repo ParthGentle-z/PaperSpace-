@@ -366,7 +366,7 @@ function App() {
       }
     };
 
-    const buildDocument = () => {
+    const buildDocument = async () => {
       generation++;
       const currentGeneration = generation;
       cancelTasks();
@@ -374,7 +374,13 @@ function App() {
       if (intersectionObserver) intersectionObserver.disconnect();
       const oldScrollTop = root.scrollTop;
       root.replaceChildren();
+      const firstPage = await pdf.getPage(1);
+      if (cancelled || currentGeneration !== generation) return;
+      const firstViewport = firstPage.getViewport({scale:1});
       const availableWidth = Math.max(240,root.clientWidth - 32);
+      const placeholderScale = fit ? Math.min(2.5,availableWidth/firstViewport.width) : zoom;
+      const placeholderWidth = firstViewport.width*placeholderScale;
+      const placeholderHeight = firstViewport.height*placeholderScale;
       const entries = [];
       for (let number=1; number<=pdf.numPages; number++) {
         const shell=document.createElement("article");
@@ -382,9 +388,8 @@ function App() {
         shell.dataset.page=String(number);
         const layer=document.createElement("div");
         layer.className="pdf-text-layer textLayer";
-        const baseWidth=pdf.getPage ? null : null;
-        shell.style.width=availableWidth+"px";
-        shell.style.minHeight=Math.max(320,availableWidth*1.25)+"px";
+        shell.style.width=placeholderWidth+"px";
+        shell.style.height=placeholderHeight+"px";
         const placeholder=document.createElement("div");
         placeholder.className="pdf-page-placeholder";
         placeholder.textContent="Loading page "+number+"…";
