@@ -313,10 +313,12 @@ function App() {
 
     const renderEntry = async (entry, currentGeneration) => {
       if (cancelled || currentGeneration !== generation || rendered.has(entry.number)) return;
+      const entryToken = (entry.token || 0) + 1;
+      entry.token = entryToken;
       rendered.add(entry.number);
       try {
         const pdfPage = await pdf.getPage(entry.number);
-        if (cancelled || currentGeneration !== generation) return;
+        if (cancelled || currentGeneration !== generation || entry.token !== entryToken) return;
         const availableWidth = Math.max(240, root.clientWidth - 32);
         const baseViewport = pdfPage.getViewport({scale:1});
         const scale = fit ? Math.min(2.5, availableWidth / baseViewport.width) : zoom;
@@ -345,21 +347,23 @@ function App() {
         if (cancelled || currentGeneration !== generation) return;
 
         const textContent = await pdfPage.getTextContent();
-        if (cancelled || currentGeneration !== generation) return;
+        if (cancelled || currentGeneration !== generation || entry.token !== entryToken) return;
         entry.layer.className = "pdf-text-layer textLayer";
         const textLayer = new pdfjs.TextLayer({
           textContentSource:textContent,
           container:entry.layer,
           viewport
         });
+        renderTasks.set(entry.number,{cancel:()=>textLayer.cancel?.()});
         await textLayer.render();
-        if (cancelled || currentGeneration !== generation) return;
+        renderTasks.delete(entry.number);
+        if (cancelled || currentGeneration !== generation || entry.token !== entryToken) return;
         paintHighlights(entry,viewport);
         entry.shell.classList.remove("pdf-sheet-loading","pdf-sheet-error");
         pdfPage.cleanup?.();
       } catch (error) {
         renderTasks.delete(entry.number);
-        if (error?.name === "RenderingCancelledException" || cancelled || currentGeneration !== generation) return;
+        if (error?.name === "RenderingCancelledException" || cancelled || currentGeneration !== generation || entry.token !== entryToken) return;
         rendered.delete(entry.number);
         console.error("PDF page render error",entry.number,error);
         entry.shell.classList.add("pdf-sheet-error");
@@ -404,9 +408,23 @@ function App() {
       }
       intersectionObserver = new IntersectionObserver(observations => {
         for (const observation of observations) {
-          if (!observation.isIntersecting) continue;
           const entry=entries[Number(observation.target.dataset.page)-1];
-          if (entry) renderEntry(entry,currentGeneration);
+          if (!entry) continue;
+          if (observation.isIntersecting) {
+            renderEntry(entry,currentGeneration);
+          } else if (rendered.has(entry.number)) {
+            entry.token=(entry.token || 0)+1;
+            try { renderTasks.get(entry.number)?.cancel?.(); } catch {}
+            renderTasks.delete(entry.number);
+            rendered.delete(entry.number);
+            const canvas=entry.shell.querySelector("canvas");
+            if (canvas) { canvas.width=0; canvas.height=0; }
+            const placeholder=document.createElement("div");
+            placeholder.className="pdf-page-placeholder";
+            placeholder.textContent="Scroll to load page "+entry.number;
+            entry.layer.replaceChildren();
+            entry.shell.replaceChildren(placeholder,entry.layer);
+          }
         }
       },{root,rootMargin:"1000px 0px",threshold:0});
       entries.forEach(entry=>intersectionObserver.observe(entry.shell));
