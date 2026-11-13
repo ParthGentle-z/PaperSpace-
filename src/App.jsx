@@ -250,119 +250,97 @@ function App() {
   },[active,removeHighlight]);
 
   const captureSelection = useCallback(() => {
-    const selected = window.getSelection();
-    if (!selected || !selected.rangeCount || !canvasHost.current || selected.isCollapsed) return null;
-    const range = selected.getRangeAt(0);
-    const startNode = range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentElement;
-    const endNode = range.endContainer.nodeType === Node.ELEMENT_NODE ? range.endContainer : range.endContainer.parentElement;
-    const sheet = startNode?.closest(".pdf-sheet");
-    if (!sheet || endNode?.closest(".pdf-sheet") !== sheet) return null;
+    const nativeSelection = window.getSelection();
+    if (!nativeSelection || nativeSelection.isCollapsed || !nativeSelection.rangeCount || !canvasHost.current) return null;
+
+    // A PDF.js TextLayer is already the browser's selectable text representation.
+    // Never infer text by measuring individual glyphs: that loses characters in
+    // proportional fonts, ligatures, superscripts and multi-span selections.
+    const range = nativeSelection.getRangeAt(0);
+    const elementFor = node => node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+    const startElement = elementFor(range.startContainer);
+    const endElement = elementFor(range.endContainer);
+    const sheet = startElement?.closest(".pdf-sheet");
+    if (!sheet || endElement?.closest(".pdf-sheet") !== sheet) return null;
+
     const layer = sheet.querySelector(".pdf-text-layer");
-    if (!layer) return null;
+    if (!layer || !layer.contains(range.startContainer) || !layer.contains(range.endContainer)) return null;
 
-    // Use the browser's actual painted selection rectangles as the source of
-    // truth. PDF text items can be stored in a different logical order from
-    // their visual order; range.toString() can therefore return unrelated
-    // neighbouring words even when the purple selection looks correct.
-    const origin = layer.getBoundingClientRect();
-    const selectionRects = Array.from(range.getClientRects()).filter(rect =>
+    // The DOM Range is the single source of truth for both quote and geometry.
+    // range.toString() preserves the browser's actual selected text; getClientRects()
+    // returns the painted line fragments of that exact same range.
+    const text = range.toString();
+    if (!text || !text.trim()) return null;
+
+    const pageBounds = sheet.getBoundingClientRect();
+    if (pageBounds.width <= 0 || pageBounds.height <= 0) return null;
+    const rawRects = Array.from(range.getClientRects()).filter(rect =>
       rect.width > 0.5 && rect.height > 0.5 &&
-      rect.right > origin.left && rect.left < origin.right &&
-      rect.bottom > origin.top && rect.top < origin.bottom
+      rect.right > pageBounds.left && rect.left < pageBounds.right &&
+      rect.bottom > pageBounds.top && rect.top < pageBounds.bottom
     );
-    if (!selectionRects.length) return null;
+    if (!rawRects.length) return null;
 
-    const walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
-    const glyphs = [];
-    let node;
-    while ((node = walker.nextNode())) {
-      const value = node.nodeValue || "";
-      for (let offset = 0; offset < value.length; offset++) {
-        const char = value[offset];
-        if (char === "\\n" || char === "\\r") continue;
-        const charRange = document.createRange();
-        charRange.setStart(node, offset);
-        charRange.setEnd(node, offset + 1);
-        const rect = charRange.getBoundingClientRect();
-        if (rect.width <= 0.15 || rect.height <= 0.15) continue;
+    // Merge adjacent fragments on the same visual line only. Coordinates are
+    // relative to the PDF page shell, so zoom/retina scaling is handled naturally.
+    const ordered = rawRects.map(rect => ({
+      left: Math.max(rect.left, pageBounds.left),
+      right: Math.min(rect.right, pageBounds.right),
+      top: Math.max(rect.top, pageBounds.top),
+      bottom: Math.min(rect.bottom, pageBounds.bottom)
+    })).sort((a,b) => a.top-b.top || a.left-b.left);
 
-        const hit = selectionRects.some(selectionRect => {
-          const vertical = Math.max(0, Math.min(rect.bottom, selectionRect.bottom) - Math.max(rect.top, selectionRect.top));
-          const horizontal = Math.max(0, Math.min(rect.right, selectionRect.right) - Math.max(rect.left, selectionRect.left));
-          return vertical >= Math.min(rect.height, selectionRect.height) * 0.42 &&
-            (char.trim() ? horizontal >= Math.min(rect.width, selectionRect.width) * 0.35 : horizontal > 0.25);
-        });
-        if (hit) glyphs.push({
-          char,
-          left:rect.left, right:rect.right, top:rect.top, bottom:rect.bottom,
-          center:(rect.top+rect.bottom)/2
-        });
-      }
-    }
-    if (!glyphs.length) return null;
-
-    // Reconstruct the passage in visual reading order, not DOM/text-item order.
-    glyphs.sort((a,b) => a.center-b.center || a.left-b.left);
     const lines = [];
-    for (const glyph of glyphs) {
-      let line = lines.find(item => Math.abs(item.center-glyph.center) <= Math.max(2, Math.min(item.height,glyph.bottom-glyph.top)*0.32));
-      if (!line) {
-        line = {center:glyph.center,top:glyph.top,bottom:glyph.bottom,height:glyph.bottom-glyph.top,glyphs:[]};
-        lines.push(line);
+    for (const rect of ordered) {
+      const line = lines.find(item => {
+        const overlap = Math.max(0, Math.min(item.bottom, rect.bottom) - Math.max(item.top, rect.top));
+        return overlap >= Math.min(item.bottom-item.top, rect.bottom-rect.top) * 0.55;
+      });
+      if (line) {
+        line.rects.push(rect);
+        line.top = Math.min(line.top,rect.top);
+        line.bottom = Math.max(line.bottom,rect.bottom);
+      } else {
+        lines.push({top:rect.top,bottom:rect.bottom,rects:[rect]});
       }
-      line.glyphs.push(glyph);
-      line.center = line.glyphs.reduce((sum,item)=>sum+item.center,0)/line.glyphs.length;
-      line.top = Math.min(line.top,glyph.top);
-      line.bottom = Math.max(line.bottom,glyph.bottom);
-      line.height = line.bottom-line.top;
     }
-    lines.sort((a,b)=>a.center-b.center);
 
-    const rects = [];
-    const textLines = [];
+    const normalizedRects = [];
     for (const line of lines) {
-      line.glyphs.sort((a,b)=>a.left-b.left);
-      let lineText = "";
-      let previous = null;
+      line.rects.sort((a,b)=>a.left-b.left);
       let merged = null;
-      for (const glyph of line.glyphs) {
-        const gap = previous ? glyph.left-previous.right : 0;
-        const spaceThreshold = Math.max(1.5,line.height*0.19);
-        if (previous && gap > spaceThreshold && !/\\s$/.test(lineText) && !/^\\s/.test(glyph.char)) lineText += " ";
-        lineText += glyph.char;
-        if (merged && glyph.left-merged.right <= Math.max(2.5,line.height*0.18)) {
-          merged.right = Math.max(merged.right,glyph.right);
-          merged.top = Math.min(merged.top,glyph.top);
-          merged.bottom = Math.max(merged.bottom,glyph.bottom);
+      for (const rect of line.rects) {
+        if (merged && rect.left-merged.right <= 3) {
+          merged.right = Math.max(merged.right,rect.right);
+          merged.top = Math.min(merged.top,rect.top);
+          merged.bottom = Math.max(merged.bottom,rect.bottom);
         } else {
-          if (merged) rects.push(merged);
-          merged = {left:glyph.left,right:glyph.right,top:glyph.top,bottom:glyph.bottom};
+          if (merged) normalizedRects.push({
+            x:(merged.left-pageBounds.left)/pageBounds.width,
+            y:(merged.top-pageBounds.top)/pageBounds.height,
+            w:(merged.right-merged.left)/pageBounds.width,
+            h:(merged.bottom-merged.top)/pageBounds.height
+          });
+          merged = {...rect};
         }
-        previous = glyph;
       }
-      if (merged) rects.push(merged);
-      if (lineText.trim()) textLines.push(lineText.trim());
+      if (merged) normalizedRects.push({
+        x:(merged.left-pageBounds.left)/pageBounds.width,
+        y:(merged.top-pageBounds.top)/pageBounds.height,
+        w:(merged.right-merged.left)/pageBounds.width,
+        h:(merged.bottom-merged.top)/pageBounds.height
+      });
     }
-    const text = textLines.join("\\n").replace(/[ \\t]+/g," ").trim();
-    if (!text) return null;
-
-    const normalizedRects = rects.map(rect => ({
-      x:(rect.left-origin.left)/origin.width,
-      y:(rect.top-origin.top)/origin.height,
-      w:(rect.right-rect.left)/origin.width,
-      h:(rect.bottom-rect.top)/origin.height
-    }));
-    if (!normalizedRects.length) return null;
 
     const captured = {
       text,
       page:Number(sheet.dataset.page),
       rects:normalizedRects,
       normalized:true,
-      selectionVersion:3
+      selectionVersion:4
     };
     selectionRef.current = captured;
-    const bounds = selectionRects.reduce((box,rect)=>({
+    const bounds = rawRects.reduce((box,rect)=>({
       left:Math.min(box.left,rect.left), top:Math.min(box.top,rect.top),
       right:Math.max(box.right,rect.right), bottom:Math.max(box.bottom,rect.bottom)
     }),{left:Infinity,top:Infinity,right:-Infinity,bottom:-Infinity});
