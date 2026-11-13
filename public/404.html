@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Opening PaperSpace…</title>
+    <script>
+      (function () {
+        var base = "/PaperSpace-/";
+        var requested = window.location.pathname + window.location.search + window.location.hash;
+        if (requested.indexOf(base) === 0) {
+          window.location.replace(base + "?p=" + encodeURIComponent(requested));
+        } else {
+          window.location.replace(base);
+        }
+      })();
+    </script>
+  </head>
+  <body><p>Opening PaperSpace…</p></body>
+</html>
