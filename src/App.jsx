@@ -255,39 +255,51 @@ function App() {
     setPage(target);
   },[]);
 
-  // Render the document as one continuous stack. ResizeObserver keeps it fitted to the available reader width.
+  // Render pages as a continuous stack. Cancel stale renders and preserve the reader scroll position on resize/zoom.
   useEffect(() => {
     if (!pdf || !canvasHost.current) return;
     let cancelled = false;
+    let renderSequence = 0;
+    let renderTimer = 0;
     const tasks = [];
     const root = canvasHost.current;
     const render = async () => {
+      const sequence = ++renderSequence;
+      tasks.forEach(task => task.cancel?.());
+      tasks.length = 0;
+      const previousScrollTop = root.scrollTop;
       root.innerHTML = "";
       try {
         for (let number=1; number<=pdf.numPages; number++) {
-          if (cancelled) return;
+          if (cancelled || sequence !== renderSequence) return;
           const pdfPage = await pdf.getPage(number);
           const baseViewport = pdfPage.getViewport({scale:1});
           const available = Math.max(240,root.clientWidth-44);
           const scale = fit ? Math.min(2.5,available/baseViewport.width) : zoom;
           const viewport = pdfPage.getViewport({scale});
           const sheet = document.createElement("article");
-          sheet.className = "pdf-sheet"; sheet.dataset.page = String(number);
+          sheet.className = "pdf-sheet";
+          sheet.dataset.page = String(number);
           const canvas = document.createElement("canvas");
           const context = canvas.getContext("2d");
           const ratio = Math.min(window.devicePixelRatio || 1,2);
           canvas.width = Math.floor(viewport.width*ratio);
           canvas.height = Math.floor(viewport.height*ratio);
-          canvas.style.width = viewport.width+"px"; canvas.style.height = viewport.height+"px";
+          canvas.style.width = viewport.width+"px";
+          canvas.style.height = viewport.height+"px";
           context.setTransform(ratio,0,0,ratio,0,0);
-          sheet.appendChild(canvas); root.appendChild(sheet);
+          sheet.appendChild(canvas);
+          root.appendChild(sheet);
           const task = pdfPage.render({canvasContext:context,viewport});
-          tasks.push(task); await task.promise;
-          if (cancelled) return;
+          tasks.push(task);
+          await task.promise;
+          if (cancelled || sequence !== renderSequence) return;
           const textContent = await pdfPage.getTextContent();
+          if (cancelled || sequence !== renderSequence) return;
           const layer = document.createElement("div");
           layer.className = "pdf-text-layer";
-          layer.style.width = viewport.width+"px"; layer.style.height = viewport.height+"px";
+          layer.style.width = viewport.width+"px";
+          layer.style.height = viewport.height+"px";
           for (const item of textContent.items) {
             if (!item.str || !item.transform) continue;
             const transform = pdfjs.Util.transform(viewport.transform,item.transform);
@@ -313,11 +325,18 @@ function App() {
             }
           }
         }
+        if (!cancelled && sequence === renderSequence) root.scrollTop = previousScrollTop;
       } catch (error) {
-        if (error?.name !== "RenderingCancelledException") console.error("PDF render error",error);
+        if (error?.name !== "RenderingCancelledException" && !cancelled && sequence === renderSequence) {
+          console.error("PDF render error",error);
+          setPdfError("The PDF could not be rendered completely. Try Fit width or reopen the file.");
+        }
       }
     };
-    const observer = new ResizeObserver(() => { if (!cancelled) render(); });
+    const observer = new ResizeObserver(() => {
+      window.clearTimeout(renderTimer);
+      renderTimer = window.setTimeout(() => { if (!cancelled) render(); },120);
+    });
     observer.observe(root);
     render();
     const onScroll = () => {
@@ -332,8 +351,15 @@ function App() {
       setPage(Number(nearest.dataset.page));
     };
     root.addEventListener("scroll",onScroll,{passive:true});
-    return () => { cancelled = true; observer.disconnect(); tasks.forEach(task => task.cancel?.()); root.removeEventListener("scroll",onScroll); };
-  },[pdf,zoom,fit,activeId,active?.highlights?.length,active?.highlights?.map(h=>h.id).join(",")]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(renderTimer);
+      observer.disconnect();
+      renderSequence++;
+      tasks.forEach(task => task.cancel?.());
+      root.removeEventListener("scroll",onScroll);
+    };
+  },[pdf,zoom,fit,activeId,active?.highlights?.length,active?.highlights?.map(highlight=>highlight.id).join(",")]);
 
   const addLocalFiles = useCallback(async files => {
     if (!db) return;
