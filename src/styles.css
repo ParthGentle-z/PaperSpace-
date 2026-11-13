@@ -685,3 +685,164 @@
     max-height:48vh;
   }
 }
+
+
+/* Final annotation workspace layout: compact quote + full-height notes workspace.
+   Kept at the end of the stylesheet so older reader styles cannot override it. */
+.reader-layout.annotation-open{
+  grid-template-columns:minmax(0,1fr) minmax(360px, min(39%, 500px)) !important;
+  align-items:stretch;
+  min-height:0;
+}
+.reader-layout.annotation-open .annotation-read-popover{
+  position:relative !important;
+  inset:auto !important;
+  grid-column:2;
+  grid-row:1;
+  width:auto !important;
+  min-width:0;
+  height:calc(100vh - 230px) !important;
+  min-height:420px;
+  max-height:calc(100vh - 230px) !important;
+  padding:0 20px 16px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:0 !important;
+  overflow:hidden !important;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--surface);
+  box-shadow:var(--shadow);
+}
+.reader-layout.annotation-open .annotation-read-head{
+  position:relative !important;
+  top:auto !important;
+  flex:0 0 58px;
+  min-height:58px;
+  margin:0 -20px !important;
+  padding:0 20px !important;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:var(--surface);
+  border-bottom:1px solid var(--line);
+  z-index:2;
+}
+.reader-layout.annotation-open .annotation-read-head .annotation-head-actions,
+.reader-layout.annotation-open .annotation-read-head .quiet-icon{
+  display:flex;
+  align-items:center;
+}
+.reader-layout.annotation-open .annotation-read-quote{
+  flex:0 0 auto !important;
+  display:-webkit-box !important;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+  max-height:62px !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+  margin:14px 0 8px !important;
+  padding:9px 12px !important;
+  border-left:3px solid var(--accent);
+  border-radius:9px;
+  background:var(--surface2);
+  font-size:12px !important;
+  line-height:1.55 !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere;
+}
+.reader-layout.annotation-open .annotation-read-quote span{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+  overflow:hidden;
+  white-space:pre-wrap;
+}
+.reader-layout.annotation-open .annotation-read-quote.expanded{
+  display:block !important;
+  max-height:22vh !important;
+  overflow:auto !important;
+}
+.reader-layout.annotation-open .annotation-quote-toggle{
+  flex:0 0 auto;
+  align-self:flex-start;
+  padding:0 0 10px;
+  font-size:11px;
+}
+.reader-layout.annotation-open .annotation-notes-area{
+  flex:1 1 0 !important;
+  min-height:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  overflow-y:auto !important;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  padding:13px 0 0 !important;
+  border-top:1px solid var(--line);
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-section-label{
+  position:sticky;
+  top:0;
+  z-index:1;
+  flex:0 0 auto;
+  margin:0 0 10px !important;
+  padding:0 0 10px !important;
+  background:var(--surface);
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-read-note,
+.reader-layout.annotation-open .annotation-notes-area .annotation-empty-note,
+.reader-layout.annotation-open .annotation-notes-area .annotation-editor{
+  flex:0 0 auto;
+  width:100%;
+  box-sizing:border-box;
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-read-note{
+  margin:0 0 10px;
+  padding:13px 14px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface2);
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-read-note p{
+  margin:8px 0 0;
+  font-size:14px;
+  line-height:1.7;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-editor{
+  margin:0 0 12px;
+  padding:12px;
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-editor textarea{
+  min-height:170px;
+  width:100%;
+  box-sizing:border-box;
+}
+.reader-layout.annotation-open .annotation-notes-area .annotation-empty-note{
+  margin:0 0 12px;
+  padding:16px;
+}
+.reader-layout.annotation-open .annotation-notes-area .text-link{
+  flex:0 0 auto;
+  margin-top:auto;
+  padding:14px 0 4px;
+}
+.reader-layout.annotation-open .reader-side{display:none !important}
+.annotation-more-trigger,.annotation-more-menu{display:none !important}
+@media(max-width:900px){
+  .reader-layout.annotation-open{
+    grid-template-columns:minmax(0,1fr) !important;
+  }
+  .reader-layout.annotation-open .annotation-read-popover{
+    grid-column:1;
+    grid-row:2;
+    height:auto !important;
+    min-height:320px;
+    max-height:55vh !important;
+  }
+}
+@media(max-width:560px){
+  .reader-layout.annotation-open .annotation-read-popover{padding:0 14px 12px !important}
+  .reader-layout.annotation-open .annotation-read-head{margin:0 -14px !important;padding:0 14px !important}
+}
