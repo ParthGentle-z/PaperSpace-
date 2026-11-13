@@ -733,11 +733,36 @@ function App() {
             <label className="search-box"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search paper titles"/></label>
           </div>
           <div className="paper-grid">
-            {filtered.map(paper => <article className="paper-card" key={paper.id}>
-              <div className="paper-card-top"><span className="pdf-icon"><FileText size={21}/></span><button className="quiet-icon" onClick={() => removePaper(paper.id)} title="Remove from library"><Trash2 size={16}/></button></div>
+            {filtered.map(paper => <article
+              className="paper-card"
+              key={paper.id}
+              role="button"
+              tabIndex={0}
+              aria-label={"Open "+paper.name}
+              onClick={() => openPaper(paper)}
+              onKeyDown={event => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openPaper(paper);
+                }
+              }}
+            >
+              <div className="paper-card-top">
+                <span className="pdf-icon"><FileText size={21}/></span>
+                <button
+                  className="quiet-icon paper-card-delete"
+                  onClick={event => { event.stopPropagation(); removePaper(paper.id); }}
+                  title={"Delete "+paper.name}
+                  aria-label={"Delete "+paper.name}
+                ><Trash2 size={16}/></button>
+              </div>
               <h3>{paper.name}</h3>
               <p className="paper-meta">{paper.provider === "google-drive" ? "Google Drive import" : "Added "+dateLabel(paper.added)}</p>
-              <div className="paper-card-bottom"><span>{(paper.notes || []).length} notes · {(paper.highlights || []).length} highlights</span><button className="button button-small" onClick={() => openPaper(paper)}>Open paper <ChevronRight size={15}/></button></div>
+              <div className="paper-card-bottom">
+                <span>{(paper.notes || []).length} notes · {(paper.highlights || []).length} highlights</span>
+                <span className="paper-card-open-label">Open paper <ChevronRight size={15}/></span>
+              </div>
             </article>)}
             {!filtered.length && <div className="empty-state"><div className="empty-icon"><Library size={24}/></div><h3>{papers.length ? "No matching papers" : "Your research library starts here"}</h3><p>{papers.length ? "Try another title search." : "Add a PDF to start reading, annotating and collecting research ideas."}</p><button className="button button-primary" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={16}/> Add your first paper</button></div>}
           </div>
