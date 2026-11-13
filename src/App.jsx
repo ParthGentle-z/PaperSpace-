@@ -108,6 +108,10 @@ function App() {
   const [driveMessage,setDriveMessage] = useState("");
   const [driveFolder,setDriveFolder] = useState(() => readJson("ps-drive-folder",null));
   const canvasHost = useRef(null);
+  // Snapshot the drag selection before the browser handles the right-click.
+  // Context-menu events can otherwise expose a changed/collapsed DOM range.
+  const selectionRef = useRef(null);
+  const selectionBoundsRef = useRef(null);
   const openingIdsRef = useRef(new Set());
   const pdfLoadSequenceRef = useRef(0);
   const driveTokenRef = useRef(null);
@@ -170,7 +174,7 @@ function App() {
     openingIdsRef.current.add(paper.id);
     const loadSequence = ++pdfLoadSequenceRef.current;
     addOpenId(paper.id);
-    setPdf(null); setPdfError(""); setPdfLoading(true); setPage(1); setSelection(null);
+    setPdf(null); setPdfError(""); setPdfLoading(true); setPage(1); selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null);
     try {
       const loaded = await pdfjs.getDocument({data:await paper.blob.arrayBuffer()}).promise;
       if (loadSequence === pdfLoadSequenceRef.current) { setPdf(loaded); setPdfLoading(false); }
@@ -365,18 +369,22 @@ function App() {
       normalized:true,
       selectionVersion:2
     };
+    selectionRef.current = captured;
+    const bounds = range.getBoundingClientRect();
+    selectionBoundsRef.current = bounds ? {left:bounds.left,top:bounds.top,right:bounds.right,bottom:bounds.bottom} : null;
     setSelection(captured);
     return captured;
   },[]);
   const handlePdfContextMenu = useCallback(event => {
-    const captured = captureSelection();
+    // Do not read window.getSelection() again here: right-click may change the
+    // browser range after the user has released the left mouse button.
+    const captured = selectionRef.current;
     if (!captured?.text) return;
     event.preventDefault();
 
-    // Anchor the menu to the selected passage, not the pointer. This keeps the
-    // popover from covering the text and making the selection look incomplete.
-    const range = window.getSelection()?.rangeCount ? window.getSelection().getRangeAt(0) : null;
-    const bounds = range?.getBoundingClientRect();
+    // Use the anchor measured at mouse-up, so the menu and quoted text refer to
+    // the exact same selection snapshot.
+    const bounds = selectionBoundsRef.current;
     const menuWidth = 284, menuHeight = 252, gutter = 10;
     const x = bounds
       ? Math.max(8, Math.min(bounds.left, window.innerWidth-menuWidth-8))
@@ -387,7 +395,7 @@ function App() {
     }
     y = Math.max(8,Math.min(y,window.innerHeight-menuHeight-8));
     setContextMenu({x,y,text:captured.text});
-  },[captureSelection]);
+  },[]);
 
   const addSelectionAsNote = useCallback(async () => {
     if (!db || !active || !selection) return;
@@ -782,7 +790,7 @@ function App() {
                 </div>
               </div>
               {pdfError ? <div className="reader-error">{pdfError}</div> : !pdf ? <div className="reader-empty"><FileText size={34}/><h2>{pdfLoading ? "Loading your paper…" : "Open a paper to read"}</h2><p>{pdfLoading ? "Preparing the PDF pages. Large documents may take a moment." : "Choose a file from Open papers on the left, or return to the Library to add one."}</p>{!pdfLoading && <button className="button button-primary" onClick={() => setRoute("library")}>Go to library</button>}</div> :
-                <div className="pdf-page-host" ref={canvasHost} onMouseUp={() => { setContextMenu(null); captureSelection(); }} onTouchEnd={captureSelection} onContextMenu={handlePdfContextMenu}/>}
+                <div className="pdf-page-host" ref={canvasHost} onMouseUp={event => { if (event.button !== 0) return; setContextMenu(null); const captured = captureSelection(); if (!captured) { selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null); } }} onTouchEnd={captureSelection} onContextMenu={handlePdfContextMenu}/>}
               {contextMenu && <div className="selection-context-menu" role="menu" style={{left:contextMenu.x,top:contextMenu.y}} onMouseDown={event=>event.preventDefault()}>
                 <div className="selection-menu-label">SELECTED PASSAGE</div>
                 <p className="selection-menu-quote">{contextMenu.text}</p>
