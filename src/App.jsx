@@ -205,7 +205,7 @@ function App() {
       pdfLoadSequenceRef.current++;
       openingIdsRef.current.delete(id);
       setActiveId(nextId);
-      setPdf(null); setPdfLoading(false); setSelection(null); setPage(1);
+      setPdf(null); setPdfLoading(false); selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null); setPage(1);
       if (!nextId) setRoute("library");
     }
   },[openIds,activeId,setRoute]);
@@ -231,7 +231,7 @@ function App() {
     const updated = {...active,highlights:[...(active.highlights || []),{id:crypto.randomUUID(),...selection,color,created:Date.now()}]};
     await dbPut(db,updated);
     setPapers(items => items.map(item => item.id === updated.id ? updated : item));
-    setSelection(null); setContextMenu(null); window.getSelection()?.removeAllRanges();
+    selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null); setContextMenu(null); window.getSelection()?.removeAllRanges();
     notify("Highlight saved.");
   },[db,active,selection,highlightColor,notify]);
 
@@ -402,7 +402,7 @@ function App() {
     const updated = {...active,notes:[...(active.notes || []),{id:crypto.randomUUID(),page:selection.page,text:"Selected passage:\n“"+selection.text+"”",created:Date.now()}]};
     await dbPut(db,updated);
     setPapers(items => items.map(item => item.id === updated.id ? updated : item));
-    setReaderTab("notes"); setContextMenu(null); setSelection(null); window.getSelection()?.removeAllRanges();
+    setReaderTab("notes"); setContextMenu(null); selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null); window.getSelection()?.removeAllRanges();
     notify("Passage added to this paper's notes.");
   },[db,active,selection,notify]);
 
