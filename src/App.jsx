@@ -3,7 +3,8 @@ import {
   BookOpen, Library, NotebookPen, Lightbulb, Search, Plus, Sun, Moon,
   ChevronRight, ChevronLeft, ChevronUp, ChevronDown, X, ZoomIn, ZoomOut, Maximize2, FileText,
   Trash2, Download, HelpCircle, Sparkles, Menu, PanelLeftClose, PanelLeftOpen,
-  FolderOpen, Cloud, Highlighter, MessageSquareText, RefreshCw, ExternalLink
+  FolderOpen, Cloud, Highlighter, MessageSquareText, RefreshCw, ExternalLink,
+  MoreHorizontal, Pencil, Save, Copy, Check
 } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -98,6 +99,10 @@ function App() {
   const [noteAnchor,setNoteAnchor] = useState(null);
   const [readMode,setReadMode] = useState(() => localStorage.getItem("ps-read-mode") === "on");
   const [annotationPopup,setAnnotationPopup] = useState(null);
+  const [editingAnnotationNoteId,setEditingAnnotationNoteId] = useState(null);
+  const [annotationDraft,setAnnotationDraft] = useState("");
+  const [annotationMenuOpen,setAnnotationMenuOpen] = useState(false);
+  const [annotationSaveBusy,setAnnotationSaveBusy] = useState(false);
   const [focusedAnnotationId,setFocusedAnnotationId] = useState("");
   const [annotationSearch,setAnnotationSearch] = useState("");
   const [annotationFilter,setAnnotationFilter] = useState("all");
@@ -271,6 +276,71 @@ function App() {
     setPapers(items => items.map(item => item.id === updated.id ? updated : item));
     notify("Highlight removed. You can select the passage again later.");
   },[db,active,notify]);
+
+  const beginAnnotationEdit = useCallback((item=null) => {
+    setEditingAnnotationNoteId(item?.id || "__new__");
+    setAnnotationDraft(item?.text || "");
+    setAnnotationMenuOpen(false);
+  },[]);
+
+  const saveAnnotationNote = useCallback(async () => {
+    if (!db || !active || !annotationPopup || !annotationDraft.trim()) return;
+    setAnnotationSaveBusy(true);
+    try {
+      const existingId = editingAnnotationNoteId && editingAnnotationNoteId !== "__new__" ? editingAnnotationNoteId : null;
+      const currentNotes = active.notes || [];
+      let savedNote;
+      let nextNotes;
+      if (existingId) {
+        nextNotes = currentNotes.map(item => item.id === existingId
+          ? {...item,text:annotationDraft.trim(),updated:Date.now()}
+          : item);
+        savedNote = nextNotes.find(item => item.id === existingId);
+      } else {
+        savedNote = {
+          id:crypto.randomUUID(),
+          page:annotationPopup.highlight.page || page,
+          text:annotationDraft.trim(),
+          created:Date.now(),
+          type:"passage",
+          anchor:{
+            text:annotationPopup.highlight.text,
+            rects:annotationPopup.highlight.rects || [],
+            normalized:!!annotationPopup.highlight.normalized,
+            selectionVersion:annotationPopup.highlight.selectionVersion || 4,
+            highlightId:annotationPopup.highlight.id
+          }
+        };
+        nextNotes = [...currentNotes,savedNote];
+      }
+      const updated = {...active,notes:nextNotes};
+      await dbPut(db,updated);
+      setPapers(items => items.map(item => item.id === updated.id ? updated : item));
+      setAnnotationPopup(current => current ? {...current,notes:nextNotes} : current);
+      setEditingAnnotationNoteId(null);
+      setAnnotationDraft("");
+      notify(existingId ? "Annotation updated and saved." : "Passage note saved.");
+    } catch (error) {
+      notify("Could not save this annotation. Please try again.");
+    } finally {
+      setAnnotationSaveBusy(false);
+    }
+  },[db,active,annotationPopup,annotationDraft,editingAnnotationNoteId,page,notify]);
+
+  const copyAnnotationText = useCallback(async text => {
+    try { await navigator.clipboard.writeText(text || ""); notify("Copied to clipboard."); }
+    catch { notify("Clipboard access was unavailable in this browser."); }
+    setAnnotationMenuOpen(false);
+  },[notify]);
+
+  const deleteAnnotationHighlight = useCallback(async () => {
+    if (!annotationPopup?.highlight?.id) return;
+    const id = annotationPopup.highlight.id;
+    setAnnotationMenuOpen(false);
+    setEditingAnnotationNoteId(null);
+    setAnnotationPopup(null);
+    await removeHighlight(id);
+  },[annotationPopup,removeHighlight]);
 
   const undoLastHighlight = useCallback(async () => {
     if (!active?.highlights?.length) return;
@@ -1042,10 +1112,29 @@ function App() {
               </div>}
             </section>
             {annotationPopup && readMode && <div className="annotation-read-popover" onClick={event=>event.stopPropagation()}>
-                <div className="annotation-read-head"><span>YOUR ANNOTATION</span><button className="quiet-icon" aria-label="Close annotation" onClick={()=>setAnnotationPopup(null)}><X size={14}/></button></div>
+                <div className="annotation-read-head">
+                  <span>YOUR ANNOTATION</span>
+                  <div className="annotation-head-actions">
+                    <button className="quiet-icon annotation-more-trigger" aria-label="More annotation options" aria-expanded={annotationMenuOpen} onClick={()=>setAnnotationMenuOpen(value=>!value)}><MoreHorizontal size={17}/></button>
+                    <button className="quiet-icon" aria-label="Close annotation" onClick={()=>{setAnnotationPopup(null);setEditingAnnotationNoteId(null);setAnnotationMenuOpen(false);}}><X size={14}/></button>
+                    {annotationMenuOpen && <div className="annotation-more-menu">
+                      <button onClick={()=>copyAnnotationText(annotationPopup.highlight.text)}><Copy size={14}/>Copy highlighted passage</button>
+                      <button onClick={()=>copyAnnotationText(annotationPopup.notes.map(item=>item.text).join("\\n\\n"))} disabled={!annotationPopup.notes.length}><Copy size={14}/>Copy saved notes</button>
+                      <button className="danger" onClick={deleteAnnotationHighlight}><Trash2 size={14}/>Delete highlight</button>
+                    </div>}
+                  </div>
+                </div>
                 <div className="annotation-read-quote">{annotationPopup.highlight.text}</div>
-                {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}><span>YOUR NOTE · {dateLabel(item.created)}</span><p>{item.text}</p></article>) : <p className="helper-copy">No note is linked to this highlight yet.</p>}
-                <button className="text-link" onClick={()=>{setAnnotationPopup(null);setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
+                <div className="annotation-section-label"><span>MY NOTES</span><button className="annotation-add-note" onClick={()=>beginAnnotationEdit()}><Plus size={13}/> Add note</button></div>
+                {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}>
+                  <div className="annotation-note-meta"><span>YOUR NOTE · {dateLabel(item.created)}</span><button className="annotation-edit-button" onClick={()=>beginAnnotationEdit(item)}><Pencil size={12}/> Edit</button></div>
+                  {editingAnnotationNoteId === item.id
+                    ? <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save changes</>}</button></div></div>
+                    : <p>{item.text}</p>}
+                </article>) : editingAnnotationNoteId === "__new__"
+                  ? <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save note</>}</button></div></div>
+                  : <div className="annotation-empty-note"><p>No note is linked to this highlight yet.</p><button onClick={()=>beginAnnotationEdit()}><Pencil size={13}/> Write a note for this passage</button></div>}
+                <button className="text-link" onClick={()=>{setAnnotationPopup(null);setEditingAnnotationNoteId(null);setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
               </div>}
             <aside className="reader-side">
               <div className="reader-side-tabs">
