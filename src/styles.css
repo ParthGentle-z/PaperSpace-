@@ -565,3 +565,31 @@
 .annotation-read-note p{overflow-wrap:anywhere}
 .annotation-read-note .annotation-editor textarea{font-size:14px}
 @media(max-width:640px){.annotation-editor textarea{min-height:112px}.annotation-more-menu{right:28px;min-width:200px}}
+\n
+/* Passage preview is a compact reference chip; notes get visual priority. */
+.reader-layout.annotation-open .annotation-read-popover{display:flex;flex-direction:column;gap:0}
+.reader-layout.annotation-open .annotation-read-quote{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;
+  overflow:hidden;max-height:none;margin:14px 0 4px;padding:10px 12px;
+  border-left-width:3px;border-radius:8px;font-size:12px;line-height:1.55;
+  background:var(--wash);overflow-wrap:anywhere;white-space:pre-wrap;
+}
+.reader-layout.annotation-open .annotation-read-quote.expanded{
+  display:block;-webkit-line-clamp:unset;overflow:visible;
+}
+.annotation-quote-toggle{
+  display:inline-flex;align-items:center;gap:5px;align-self:flex-start;
+  padding:4px 0 12px;border:0;background:transparent;color:var(--accent);
+  font-size:11px;font-weight:700;cursor:pointer
+}
+.reader-layout.annotation-open .annotation-section-label{
+  margin-top:8px;padding-top:12px;border-top:1px solid var(--line)
+}
+.reader-layout.annotation-open .annotation-read-note{
+  padding:13px 0;border-bottom:1px solid var(--line)
+}
+.reader-layout.annotation-open .annotation-read-note p{
+  margin-top:7px;font-size:14px;line-height:1.75;white-space:pre-wrap;
+  overflow-wrap:anywhere
+}
+.annotation-editor textarea{white-space:pre-wrap;tab-size:4}
