@@ -247,30 +247,127 @@ function App() {
 
   const captureSelection = useCallback(() => {
     const selected = window.getSelection();
-    const text = selected?.toString().trim();
-    if (!text || !canvasHost.current || !selected.rangeCount) return null;
+    if (!selected || !selected.rangeCount || !canvasHost.current) return null;
     const range = selected.getRangeAt(0);
-    const startNode = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+    const text = range.toString().trim();
+    if (!text) return null;
+
+    const startNode = range.startContainer.nodeType === Node.ELEMENT_NODE
+      ? range.startContainer : range.startContainer.parentElement;
+    const endNode = range.endContainer.nodeType === Node.ELEMENT_NODE
+      ? range.endContainer : range.endContainer.parentElement;
     const sheet = startNode?.closest(".pdf-sheet");
-    if (!sheet) return null;
+    // A passage must belong to one page. Cross-page selections are rejected
+    // rather than silently storing coordinates against the wrong page.
+    if (!sheet || !endNode?.closest(".pdf-sheet") || endNode.closest(".pdf-sheet") !== sheet) return null;
     const layer = sheet.querySelector(".pdf-text-layer");
     if (!layer) return null;
+
     const origin = layer.getBoundingClientRect();
-    const sheetBounds = sheet.getBoundingClientRect();
-    const rects = Array.from(range.getClientRects()).filter(rect =>
-      rect.width > 0 && rect.height > 0 &&
-      rect.right > sheetBounds.left && rect.left < sheetBounds.right &&
-      rect.bottom > sheetBounds.top && rect.top < sheetBounds.bottom
-    ).map(rect => ({
-      x:(rect.left-origin.left)/origin.width, y:(rect.top-origin.top)/origin.height,
-      w:rect.width/origin.width, h:rect.height/origin.height
+    if (!origin.width || !origin.height) return null;
+
+    // PDF.js positions each text span independently. Range.getClientRects()
+    // can return the full span box for partial-span selections in some PDFs.
+    // Measure selected character fragments instead, then merge adjacent glyphs
+    // on the same visual line into tight highlight rectangles.
+    const walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+    const glyphRects = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      const length = node.nodeValue?.length || 0;
+      if (!length) continue;
+      let first = 0;
+      let last = length;
+      try {
+        const atStart = range.comparePoint(node, 0);
+        const atEnd = range.comparePoint(node, length);
+        if (atStart === 1 || atEnd === -1) continue;
+
+        if (atStart === -1) {
+          let lo = 0, hi = length;
+          while (lo < hi) {
+            const mid = Math.floor((lo + hi) / 2);
+            if (range.comparePoint(node, mid) === -1) lo = mid + 1;
+            else hi = mid;
+          }
+          first = lo;
+        }
+        if (atEnd === 1) {
+          let lo = first, hi = length;
+          while (lo < hi) {
+            const mid = Math.floor((lo + hi) / 2);
+            if (range.comparePoint(node, mid) === 1) hi = mid;
+            else lo = mid + 1;
+          }
+          last = lo;
+        }
+      } catch { continue; }
+
+      for (let offset = first; offset < last; offset++) {
+        const charRange = document.createRange();
+        charRange.setStart(node, offset);
+        charRange.setEnd(node, offset + 1);
+        const rect = charRange.getBoundingClientRect();
+        if (rect.width > 0.1 && rect.height > 0.1 &&
+            rect.right > origin.left && rect.left < origin.right &&
+            rect.bottom > origin.top && rect.top < origin.bottom) {
+          glyphRects.push({left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom});
+        }
+      }
+    }
+
+    if (!glyphRects.length) return null;
+    glyphRects.sort((a,b) => a.top-b.top || a.left-b.left);
+    const lines = [];
+    for (const glyph of glyphRects) {
+      const tolerance = Math.max(2, (glyph.bottom-glyph.top)*0.22);
+      let line = lines.find(item => Math.abs(item.top-glyph.top) <= tolerance);
+      if (!line) {
+        line = {top:glyph.top,bottom:glyph.bottom,rects:[]};
+        lines.push(line);
+      }
+      line.rects.push(glyph);
+      line.top = Math.min(line.top,glyph.top);
+      line.bottom = Math.max(line.bottom,glyph.bottom);
+    }
+
+    const rects = [];
+    for (const line of lines) {
+      line.rects.sort((a,b)=>a.left-b.left);
+      let merged = null;
+      for (const glyph of line.rects) {
+        const gap = merged ? glyph.left-merged.right : Infinity;
+        const joinGap = Math.max(2.5,(glyph.bottom-glyph.top)*0.18);
+        if (merged && gap <= joinGap) {
+          merged.right = Math.max(merged.right,glyph.right);
+          merged.top = Math.min(merged.top,glyph.top);
+          merged.bottom = Math.max(merged.bottom,glyph.bottom);
+        } else {
+          if (merged) rects.push(merged);
+          merged = {...glyph};
+        }
+      }
+      if (merged) rects.push(merged);
+    }
+
+    const normalizedRects = rects.map(rect => ({
+      x:(rect.left-origin.left)/origin.width,
+      y:(rect.top-origin.top)/origin.height,
+      w:(rect.right-rect.left)/origin.width,
+      h:(rect.bottom-rect.top)/origin.height
     }));
-    if (!rects.length) return null;
-    const captured = {text,page:Number(sheet.dataset.page),rects,normalized:true};
+    if (!normalizedRects.length) return null;
+
+    const captured = {
+      text,
+      page:Number(sheet.dataset.page),
+      rects:normalizedRects,
+      normalized:true,
+      selectionVersion:2
+    };
     setSelection(captured);
     return captured;
   },[]);
-
   const handlePdfContextMenu = useCallback(event => {
     const captured = captureSelection();
     if (!captured?.text) return;
