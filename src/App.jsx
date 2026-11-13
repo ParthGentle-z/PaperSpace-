@@ -229,9 +229,9 @@ function App() {
     setNote(""); notify("Note saved on page "+page+".");
   },[db,active,note,page,notify]);
 
-  const saveHighlight = useCallback(async (color=highlightColor) => {
+  const saveHighlight = useCallback(async (color=highlightColor, category="General") => {
     if (!db || !active || !selection) return;
-    const updated = {...active,highlights:[...(active.highlights || []),{id:crypto.randomUUID(),...selection,color,created:Date.now()}]};
+    const updated = {...active,highlights:[...(active.highlights || []),{id:crypto.randomUUID(),...selection,color,category,created:Date.now()}]};
     await dbPut(db,updated);
     setPapers(items => items.map(item => item.id === updated.id ? updated : item));
     selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null); setContextMenu(null); window.getSelection()?.removeAllRanges();
@@ -359,7 +359,7 @@ function App() {
     // Use the anchor measured at mouse-up, so the menu and quoted text refer to
     // the exact same selection snapshot.
     const bounds = selectionBoundsRef.current;
-    const menuWidth = 284, menuHeight = 252, gutter = 10;
+    const menuWidth = 284, menuHeight = 330, gutter = 10;
     const x = bounds
       ? Math.max(8, Math.min(bounds.left, window.innerWidth-menuWidth-8))
       : Math.max(8, Math.min(event.clientX,window.innerWidth-menuWidth-8));
@@ -840,6 +840,12 @@ function App() {
               {contextMenu && <div className="selection-context-menu" role="menu" style={{left:contextMenu.x,top:contextMenu.y}} onMouseDown={event=>event.preventDefault()}>
                 <div className="selection-menu-label">SELECTED PASSAGE</div>
                 <p className="selection-menu-quote">{contextMenu.text}</p>
+                <div className="smart-highlight-label">SMART HIGHLIGHT · CLASSIFY THIS PASSAGE</div>
+                <div className="smart-highlight-types">
+                  {[
+                    ["Key idea","#FFE58F"],["Definition","#BFE8C8"],["Method","#B9DDF5"],["Result","#F4C2D7"],["Question","#D8C8F3"]
+                  ].map(([category,color])=><button key={category} className="smart-highlight-type" onClick={()=>saveHighlight(color,category)}><span style={{background:color}}/>{category}</button>)}
+                </div>
                 <div className="selection-menu-colors" aria-label="Highlight selected passage">
                   {[
                     ["#FFE58F","Warm yellow"],["#BFE8C8","Mint green"],["#B9DDF5","Sky blue"],["#F4C2D7","Soft rose"],["#D8C8F3","Lavender"],
@@ -863,7 +869,7 @@ function App() {
               </div>}
               {readerTab === "highlights" && <div className="reader-side-scroll">
                 <section className="side-card"><div className="card-eyebrow">ANNOTATIONS</div><h3>{activeHighlights.length} saved highlights</h3><p className="helper-copy">Select text, right-click it, then choose a colour. Remove any highlight individually here, or use Undo last in the reader toolbar.</p>
-                  {activeHighlights.length ? [...activeHighlights].sort((a,b)=>b.created-a.created).map(item=><article className="highlight-entry" key={item.id}><div><span>PAGE {item.page}</span><p>{item.text}</p></div><button className="quiet-icon" title="Remove this highlight" onClick={() => removeHighlight(item.id)}><Trash2 size={15}/></button></article>) : <p className="helper-copy">No highlights saved for this paper yet.</p>}
+                  {activeHighlights.length ? [...activeHighlights].sort((a,b)=>b.created-a.created).map(item=><article className="highlight-entry" key={item.id}><div><span>{(item.category || "GENERAL").toUpperCase()} · PAGE {item.page}</span><p>{item.text}</p></div><button className="quiet-icon" title="Remove this highlight" onClick={() => removeHighlight(item.id)}><Trash2 size={15}/></button></article>) : <p className="helper-copy">No highlights saved for this paper yet.</p>}
                 </section>
               </div>}
               {readerTab === "ai" && <div className="reader-side-scroll">
