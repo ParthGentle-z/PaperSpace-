@@ -466,3 +466,77 @@
   .annotation-read-quote{font-size:14px;line-height:1.7;padding:12px}
   .annotation-read-note p{font-size:14px}
 }
+
+
+/* Read Mode: reserve a real column for annotations; never float over PDF text. */
+.reader-layout.annotation-open{
+  grid-template-columns:minmax(0,1fr) minmax(340px, min(40%, 480px));
+  align-items:stretch;
+}
+.reader-layout.annotation-open .pdf-panel{min-width:0}
+.reader-layout.annotation-open .pdf-page-host{height:calc(100vh - 230px)}
+.reader-layout.annotation-open .annotation-read-popover{
+  position:relative;
+  inset:auto!important;
+  z-index:1;
+  width:auto;
+  min-width:0;
+  max-height:calc(100vh - 230px);
+  align-self:stretch;
+  overflow:auto;
+  padding:22px 22px 24px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:var(--surface);
+  box-shadow:var(--shadow);
+  overscroll-behavior:contain;
+}
+.reader-layout.annotation-open .annotation-read-head{
+  position:sticky;top:-22px;z-index:2;
+  margin:-22px -22px 0;
+  padding:18px 22px 15px;
+  background:var(--surface);
+  border-bottom:1px solid var(--line);
+  font-size:11px;
+}
+.reader-layout.annotation-open .annotation-read-quote{
+  margin:20px 0 22px;
+  padding:16px 17px;
+  font-size:15px;
+  line-height:1.85;
+  overflow-wrap:anywhere;
+}
+.reader-layout.annotation-open .annotation-read-note{
+  padding:18px 0;
+}
+.reader-layout.annotation-open .annotation-read-note span{
+  font-size:10px;
+}
+.reader-layout.annotation-open .annotation-read-note p{
+  font-size:15px;
+  line-height:1.85;
+  overflow-wrap:anywhere;
+}
+.reader-layout.annotation-open .annotation-read-popover .text-link{
+  margin-top:14px;
+  font-size:13px;
+}
+.reader-layout.annotation-open .reader-side{display:none}
+@media(max-width:900px){
+  .reader-layout.annotation-open{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .reader-layout.annotation-open .annotation-read-popover{
+    grid-row:2;
+    max-height:48vh;
+  }
+  .reader-layout.annotation-open .pdf-page-host{height:65vh}
+}
+@media(max-width:560px){
+  .reader-layout.annotation-open .annotation-read-popover{padding:16px}
+  .reader-layout.annotation-open .annotation-read-head{
+    top:-16px;margin:-16px -16px 0;padding:14px 16px;
+  }
+  .reader-layout.annotation-open .annotation-read-quote,
+  .reader-layout.annotation-open .annotation-read-note p{font-size:14px}
+}
