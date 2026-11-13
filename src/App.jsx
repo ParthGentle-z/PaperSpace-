@@ -86,6 +86,7 @@ function App() {
   const [activeId,setActiveId] = useState(() => localStorage.getItem("ps-active-paper-id") || "");
   const [pdf,setPdf] = useState(null);
   const [pdfError,setPdfError] = useState("");
+  const [pdfLoading,setPdfLoading] = useState(false);
   const [page,setPage] = useState(1);
   const [zoom,setZoom] = useState(1);
   const [fit,setFit] = useState(true);
@@ -167,14 +168,14 @@ function App() {
     openingIdsRef.current.add(paper.id);
     const loadSequence = ++pdfLoadSequenceRef.current;
     addOpenId(paper.id);
-    setPdf(null); setPdfError(""); setPage(1); setSelection(null);
+    setPdf(null); setPdfError(""); setPdfLoading(true); setPage(1); setSelection(null);
     try {
       const loaded = await pdfjs.getDocument({data:await paper.blob.arrayBuffer()}).promise;
-      if (loadSequence === pdfLoadSequenceRef.current) setPdf(loaded);
+      if (loadSequence === pdfLoadSequenceRef.current) { setPdf(loaded); setPdfLoading(false); }
       else loaded.destroy?.();
     } catch (error) {
       console.error(error);
-      if (loadSequence === pdfLoadSequenceRef.current) setPdfError("This PDF could not be opened. It may be damaged or stored in an unsupported format.");
+      if (loadSequence === pdfLoadSequenceRef.current) { setPdfError("This PDF could not be opened. It may be damaged or stored in an unsupported format."); setPdfLoading(false); }
     } finally {
       openingIdsRef.current.delete(paper.id);
     }
@@ -621,7 +622,7 @@ function App() {
                   <button className="tool-btn undo-highlight" disabled={!activeHighlights.length} onClick={undoLastHighlight} title="Remove only the most recently saved highlight"><RefreshCw size={14}/> Undo last</button>
                 </div>
               </div>
-              {pdfError ? <div className="reader-error">{pdfError}</div> : !pdf ? <div className="reader-empty"><FileText size={34}/><h2>Open a paper to read</h2><p>Choose a file from Open papers on the left, or return to the Library to add one.</p><button className="button button-primary" onClick={() => setRoute("library")}>Go to library</button></div> :
+              {pdfError ? <div className="reader-error">{pdfError}</div> : !pdf ? <div className="reader-empty"><FileText size={34}/><h2>{pdfLoading ? "Loading your paper…" : "Open a paper to read"}</h2><p>{pdfLoading ? "Preparing the PDF pages. Large documents may take a moment." : "Choose a file from Open papers on the left, or return to the Library to add one."}</p>{!pdfLoading && <button className="button button-primary" onClick={() => setRoute("library")}>Go to library</button>}</div> :
                 <div className="pdf-page-host" ref={canvasHost} onMouseUp={captureSelection} onTouchEnd={captureSelection}/>}
             </section>
             <aside className="reader-side">
