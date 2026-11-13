@@ -222,3 +222,22 @@
  .pdf-page-host{touch-action:pan-y pan-x}
  .highlight-swatch{width:17px;height:17px}
 }
+
+
+/* Native-feeling contextual actions for selected PDF text */
+.pdf-panel{position:relative}
+.selection-context-menu{
+ position:fixed;z-index:60;width:min(260px,calc(100vw - 20px));
+ padding:10px;background:var(--surface);border:1px solid var(--line);
+ border-radius:12px;box-shadow:0 14px 40px rgba(12,18,32,.24);
+ color:var(--text);line-height:1.4
+}
+.selection-menu-label{font-size:9px;letter-spacing:1.15px;font-weight:800;color:var(--soft);margin:1px 3px 6px}
+.selection-menu-quote{font-size:11px;line-height:1.45;color:var(--muted);margin:0 3px 9px;max-height:55px;overflow:auto;overflow-wrap:anywhere}
+.selection-menu-colors{display:flex;align-items:center;gap:10px;padding:7px 4px 9px;border-top:1px solid var(--line)}
+.selection-menu-color{width:23px;height:23px;border-radius:50%;background:var(--swatch);border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line);cursor:pointer}
+.selection-menu-color:hover{transform:scale(1.12);box-shadow:0 0 0 2px var(--accent)}
+.selection-menu-action{width:100%;display:flex;align-items:center;gap:9px;padding:9px 8px;border:0;border-radius:7px;background:transparent;color:var(--text);font-size:12px;text-align:left;cursor:pointer}
+.selection-menu-action:hover{background:var(--wash);color:var(--accent)}
+.selection-menu-dismiss{width:100%;margin-top:4px;padding:7px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--soft);font-size:11px;text-align:center;cursor:pointer}
+@media(max-width:650px){.selection-context-menu{width:min(250px,calc(100vw - 16px));}}
