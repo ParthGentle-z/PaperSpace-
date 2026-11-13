@@ -96,6 +96,7 @@ function App() {
   const [selectedConcept,setSelectedConcept] = useState(concepts[0]);
   const [note,setNote] = useState("");
   const [selection,setSelection] = useState(null);
+  const [contextMenu,setContextMenu] = useState(null);
   const [highlightColor,setHighlightColor] = useState("#ffe36b");
   const [readerTab,setReaderTab] = useState("notes");
   const [sidebarVisible,setSidebarVisible] = useState(() => localStorage.getItem("ps-sidebar") !== "hidden");
@@ -221,12 +222,12 @@ function App() {
     setNote(""); notify("Note saved on page "+page+".");
   },[db,active,note,page,notify]);
 
-  const saveHighlight = useCallback(async () => {
+  const saveHighlight = useCallback(async (color=highlightColor) => {
     if (!db || !active || !selection) return;
-    const updated = {...active,highlights:[...(active.highlights || []),{id:crypto.randomUUID(),...selection,color:highlightColor,created:Date.now()}]};
+    const updated = {...active,highlights:[...(active.highlights || []),{id:crypto.randomUUID(),...selection,color,created:Date.now()}]};
     await dbPut(db,updated);
     setPapers(items => items.map(item => item.id === updated.id ? updated : item));
-    setSelection(null); window.getSelection()?.removeAllRanges();
+    setSelection(null); setContextMenu(null); window.getSelection()?.removeAllRanges();
     notify("Highlight saved.");
   },[db,active,selection,highlightColor,notify]);
 
@@ -247,13 +248,13 @@ function App() {
   const captureSelection = useCallback(() => {
     const selected = window.getSelection();
     const text = selected?.toString().trim();
-    if (!text || !canvasHost.current || !selected.rangeCount) return;
+    if (!text || !canvasHost.current || !selected.rangeCount) return null;
     const range = selected.getRangeAt(0);
     const startNode = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
     const sheet = startNode?.closest(".pdf-sheet");
-    if (!sheet) return;
+    if (!sheet) return null;
     const layer = sheet.querySelector(".pdf-text-layer");
-    if (!layer) return;
+    if (!layer) return null;
     const origin = layer.getBoundingClientRect();
     const sheetBounds = sheet.getBoundingClientRect();
     const rects = Array.from(range.getClientRects()).filter(rect =>
@@ -264,8 +265,35 @@ function App() {
       x:(rect.left-origin.left)/origin.width, y:(rect.top-origin.top)/origin.height,
       w:rect.width/origin.width, h:rect.height/origin.height
     }));
-    if (rects.length) setSelection({text,page:Number(sheet.dataset.page),rects,normalized:true});
+    if (!rects.length) return null;
+    const captured = {text,page:Number(sheet.dataset.page),rects,normalized:true};
+    setSelection(captured);
+    return captured;
   },[]);
+
+  const handlePdfContextMenu = useCallback(event => {
+    const captured = captureSelection();
+    if (!captured?.text) return;
+    event.preventDefault();
+    const menuWidth = 248, menuHeight = 190;
+    setContextMenu({x:Math.max(8,Math.min(event.clientX,window.innerWidth-menuWidth-8)),y:Math.max(8,Math.min(event.clientY,window.innerHeight-menuHeight-8)),text:captured.text});
+  },[captureSelection]);
+
+  const addSelectionAsNote = useCallback(async () => {
+    if (!db || !active || !selection) return;
+    const updated = {...active,notes:[...(active.notes || []),{id:crypto.randomUUID(),page:selection.page,text:"Selected passage:\n“"+selection.text+"”",created:Date.now()}]};
+    await dbPut(db,updated);
+    setPapers(items => items.map(item => item.id === updated.id ? updated : item));
+    setReaderTab("notes"); setContextMenu(null); setSelection(null); window.getSelection()?.removeAllRanges();
+    notify("Passage added to this paper's notes.");
+  },[db,active,selection,notify]);
+
+  const copySelection = useCallback(async () => {
+    if (!selection?.text) return;
+    try { await navigator.clipboard.writeText(selection.text); notify("Selected passage copied."); }
+    catch { notify("Clipboard access is unavailable in this browser."); }
+    setContextMenu(null);
+  },[selection,notify]);
 
   const scrollToPage = useCallback(target => {
     const pageElement = canvasHost.current?.querySelector('[data-page="'+target+'"]');
@@ -627,12 +655,6 @@ function App() {
             <div className="reader-title-line"><span className="eyebrow">READING WORKSPACE</span><span className="reader-document-title" title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</span></div>
             <div className="reader-headline-actions"><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small" onClick={() => setRoute("library")}><X size={14}/> Library</button></div>
           </div>
-          {openPapers.length > 0 && <div className="reader-tabs" aria-label="Open documents">
-            {openPapers.map(paper => <div className={"reader-tab "+(paper.id === activeId ? "active" : "")} key={paper.id}>
-              <button onClick={() => openPaper(paper)} title={paper.name}><FileText size={14}/><span>{paper.name}</span></button>
-              <button className="reader-tab-close" onClick={() => closeOpenPaper(paper.id)} title="Close paper"><X size={13}/></button>
-            </div>)}
-          </div>}
           <div className="reader-layout">
             <section className="pdf-panel">
               <div className="pdf-toolbar">
@@ -642,9 +664,6 @@ function App() {
                   <button className="icon-btn" disabled={!pdf || page >= pdf.numPages} onClick={() => scrollToPage(Math.min(pdf?.numPages || page,page+1))}><ChevronRight size={17}/></button>
                 </div>
                 <div className="toolbar-tools">
-                  {selection && <><div className="highlight-colors" aria-label="Highlight colour">
-                    {["#ffe36b","#a7e8bd","#9ed8ff","#f6b0ca"].map(color=><button key={color} type="button" className={"highlight-swatch "+(highlightColor===color?"active":"")} style={{"--swatch":color}} aria-label={"Choose "+color+" highlight"} title={"Highlight colour "+color} onClick={()=>setHighlightColor(color)}/>)}
-                  </div><button className="tool-btn highlight-action" onClick={saveHighlight}><Highlighter size={14}/> Save highlight</button></>}
                   <button className={"tool-btn "+(fit ? "selected" : "")} onClick={() => setFit(true)}><Maximize2 size={14}/> Fit width</button>
                   <button className="icon-btn" disabled={!pdf} onClick={() => {setFit(false);setZoom(value=>Math.max(.55,value-.15));}} title="Zoom out"><ZoomOut size={16}/></button>
                   <span className="zoom-value">{fit ? "Fit" : Math.round(zoom*100)+"%"}</span>
@@ -653,7 +672,17 @@ function App() {
                 </div>
               </div>
               {pdfError ? <div className="reader-error">{pdfError}</div> : !pdf ? <div className="reader-empty"><FileText size={34}/><h2>{pdfLoading ? "Loading your paper…" : "Open a paper to read"}</h2><p>{pdfLoading ? "Preparing the PDF pages. Large documents may take a moment." : "Choose a file from Open papers on the left, or return to the Library to add one."}</p>{!pdfLoading && <button className="button button-primary" onClick={() => setRoute("library")}>Go to library</button>}</div> :
-                <div className="pdf-page-host" ref={canvasHost} onMouseUp={captureSelection} onTouchEnd={captureSelection}/>}
+                <div className="pdf-page-host" ref={canvasHost} onMouseUp={() => { setContextMenu(null); captureSelection(); }} onTouchEnd={captureSelection} onContextMenu={handlePdfContextMenu}/>}
+              {contextMenu && <div className="selection-context-menu" role="menu" style={{left:contextMenu.x,top:contextMenu.y}} onMouseDown={event=>event.preventDefault()}>
+                <div className="selection-menu-label">SELECTED PASSAGE</div>
+                <p className="selection-menu-quote">{contextMenu.text}</p>
+                <div className="selection-menu-colors" aria-label="Highlight selected passage">
+                  {[["#ffe36b","Yellow"],["#a7e8bd","Green"],["#9ed8ff","Blue"],["#f6b0ca","Pink"]].map(([color,label])=><button key={color} className="selection-menu-color" style={{"--swatch":color}} title={"Highlight "+label} aria-label={"Highlight "+label} onClick={()=>saveHighlight(color)}/>)}
+                </div>
+                <button className="selection-menu-action" onClick={addSelectionAsNote}><NotebookPen size={14}/> Add to reading notes</button>
+                <button className="selection-menu-action" onClick={copySelection}><FileText size={14}/> Copy selected text</button>
+                <button className="selection-menu-dismiss" onClick={()=>setContextMenu(null)}>Cancel</button>
+              </div>}
             </section>
             <aside className="reader-side">
               <div className="reader-side-tabs">
@@ -666,7 +695,7 @@ function App() {
                 <section className="side-card"><div className="card-eyebrow">THIS PAPER</div><h3>Recent thoughts</h3>{activeNotes.length ? [...activeNotes].sort((a,b)=>b.created-a.created).map(item=><article className="note-entry" key={item.id}><span>PAGE {item.page} · {dateLabel(item.created)}</span><p>{item.text}</p></article>) : <p className="helper-copy">Notes for this paper will appear here.</p>}</section>
               </div>}
               {readerTab === "highlights" && <div className="reader-side-scroll">
-                <section className="side-card"><div className="card-eyebrow">ANNOTATIONS</div><h3>{activeHighlights.length} saved highlights</h3><p className="helper-copy">Select text in the PDF, then choose Save highlight. Remove individual highlights here or undo the most recent one from the toolbar.</p>
+                <section className="side-card"><div className="card-eyebrow">ANNOTATIONS</div><h3>{activeHighlights.length} saved highlights</h3><p className="helper-copy">Select text, right-click it, then choose a colour. Remove any highlight individually here, or use Undo last in the reader toolbar.</p>
                   {activeHighlights.length ? [...activeHighlights].sort((a,b)=>b.created-a.created).map(item=><article className="highlight-entry" key={item.id}><div><span>PAGE {item.page}</span><p>{item.text}</p></div><button className="quiet-icon" title="Remove this highlight" onClick={() => removeHighlight(item.id)}><Trash2 size={15}/></button></article>) : <p className="helper-copy">No highlights saved for this paper yet.</p>}
                 </section>
               </div>}
