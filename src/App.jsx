@@ -78,7 +78,7 @@ function App() {
   const [view,setView] = useState(() => {
     const requested = new URLSearchParams(window.location.search).get("p");
     if (requested) window.history.replaceState({}, "", requested);
-    return window.location.pathname.replace(/\\/$/,"").endsWith("/Reading") ? "reader" : "library";
+    return window.location.pathname.replace(/\/$/,"").endsWith("/Reading") ? "reader" : "library";
   });
   const [db,setDb] = useState(null);
   const [papers,setPapers] = useState([]);
@@ -148,7 +148,7 @@ function App() {
     setMobileSidebar(false);
   },[]);
   useEffect(() => {
-    const onPop = () => setView(window.location.pathname.replace(/\\/$/,"").endsWith("/Reading") ? "reader" : "library");
+    const onPop = () => setView(window.location.pathname.replace(/\/$/,"").endsWith("/Reading") ? "reader" : "library");
     window.addEventListener("popstate",onPop);
     return () => window.removeEventListener("popstate",onPop);
   },[]);
@@ -176,7 +176,6 @@ function App() {
     if (!db || view !== "reader" || !activeId || pdf) return;
     const paper = papers.find(item => item.id === activeId);
     if (paper?.blob) {
-      pdfjs.getDocument({data:paper.blob.arrayBuffer ? undefined : paper.blob}).promise.catch(()=>{});
       openPaper(paper);
     }
   // The selected document is intentionally the trigger here; openPaper owns PDF loading.
@@ -451,7 +450,7 @@ function App() {
         <header className="topbar">
           <div className="topbar-left">
             <button className="icon-btn sidebar-toggle" title={sidebarVisible ? (sidebarCollapsed ? "Expand menu" : "Hide menu") : "Show menu"}
-              onClick={() => { if (!sidebarVisible) setSidebarVisible(true); else if (window.matchMedia("(max-width: 820px)").matches) setMobileSidebar(v=>!v); else setSidebarCollapsed(v=>!v); }}>
+              onClick={() => { if (window.matchMedia("(max-width: 820px)").matches) { if (!sidebarVisible) { setSidebarVisible(true); setMobileSidebar(true); } else setMobileSidebar(v=>!v); } else { setSidebarVisible(v=>!v); } }}>
               {sidebarVisible ? (sidebarCollapsed ? <PanelLeftOpen size={17}/> : <PanelLeftClose size={17}/>) : <Menu size={17}/>}
             </button>
             <div className="breadcrumb"><span>WORKSPACE</span><b>/</b><strong>{view === "reader" ? "Reading" : view === "library" ? "Library" : view === "notes" ? "Research notes" : "Concept desk"}</strong></div>
