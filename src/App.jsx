@@ -109,6 +109,7 @@ function App() {
   const [driveMessage,setDriveMessage] = useState("");
   const [driveFolder,setDriveFolder] = useState(() => readJson("ps-drive-folder",null));
   const canvasHost = useRef(null);
+  const activeHighlightsRef = useRef([]);
   // Snapshot the drag selection before the browser handles the right-click.
   // Context-menu events can otherwise expose a changed/collapsed DOM range.
   const selectionRef = useRef(null);
@@ -119,6 +120,7 @@ function App() {
   const toastTimer = useRef(null);
 
   const active = papers.find(p => p.id === activeId) || null;
+  activeHighlightsRef.current = active?.highlights || [];
   const notes = useMemo(() => papers.flatMap(p => (p.notes || []).map(n => ({...n,paperName:p.name,paperId:p.id}))),[papers]);
   const filtered = useMemo(() => papers.filter(p => p.name.toLowerCase().includes(query.toLowerCase())),[papers,query]);
   const matchingConcepts = useMemo(() => concepts.filter(c => (c.term+" "+c.area).toLowerCase().includes(termQuery.toLowerCase())),[termQuery]);
@@ -246,8 +248,7 @@ function App() {
 
   const undoLastHighlight = useCallback(async () => {
     if (!active?.highlights?.length) return;
-    const last = [...active.highlights].sort((a,b) => b.created-a.created)[0];
-    await removeHighlight(last.id);
+    const last = [...active.highlights].sort((a,b) => b.created-a.created)[0];    await removeHighlight(last.id);
   },[active,removeHighlight]);
 
   const captureSelection = useCallback(() => {
@@ -418,7 +419,7 @@ function App() {
     };
 
     const paintHighlights = (entry, viewport) => {
-      for (const highlight of (active?.highlights || []).filter(item => item.page === entry.number)) {
+      for (const highlight of (activeHighlightsRef.current || []).filter(item => item.page === entry.number)) {
         for (const rect of highlight.rects || []) {
           const mark = document.createElement("div");
           mark.className = "saved-highlight";
@@ -496,8 +497,7 @@ function App() {
         entry.shell.classList.add("pdf-sheet-error");
         entry.shell.replaceChildren();
         const message = document.createElement("p");
-        message.className = "pdf-page-error-message";
-        message.textContent = "Page " + entry.number + " could not be rendered. Scroll away and back to retry, or reopen the paper.";
+        message.className = "pdf-page-error-message";        message.textContent = "Page " + entry.number + " could not be rendered. Scroll away and back to retry, or reopen the paper.";
         entry.shell.appendChild(message);
       }
     };
@@ -586,7 +586,37 @@ function App() {
       cancelTasks();
       root.removeEventListener("scroll",onScroll);
     };
-  },[view,pdf,zoom,fit,activeId,active?.highlights?.map(item=>item.id+":"+(item.color||"")).join(",")]);
+  },[view,pdf,zoom,fit,activeId]);
+
+  // Annotation updates must never rebuild the PDF page tree. Repaint only the
+  // lightweight overlay rectangles, leaving canvases, text layers and scroll
+  // position untouched. This is intentionally independent of PDF rendering.
+  useEffect(() => {
+    if (view !== "reader" || !pdf || !canvasHost.current) return;
+    const root = canvasHost.current;
+    const pages = root.querySelectorAll(".pdf-sheet");
+    pages.forEach(sheet => {
+      const layer = sheet.querySelector(".pdf-text-layer");
+      if (!layer) return;
+      layer.querySelectorAll(":scope > .saved-highlight").forEach(node => node.remove());
+      const pageNumber = Number(sheet.dataset.page);
+      const pageHighlights = (activeHighlightsRef.current || []).filter(item => item.page === pageNumber);
+      const width = layer.clientWidth || sheet.clientWidth;
+      const height = layer.clientHeight || sheet.clientHeight;
+      if (!width || !height) return;
+      pageHighlights.forEach(highlight => (highlight.rects || []).forEach(rect => {
+        const mark = document.createElement("div");
+        mark.className = "saved-highlight";
+        mark.style.background = highlight.color || "#ffe36b";
+        const x = highlight.normalized ? rect.x * width : rect.x;
+        const y = highlight.normalized ? rect.y * height : rect.y;
+        const w = highlight.normalized ? rect.w * width : rect.w;
+        const h = highlight.normalized ? rect.h * height : rect.h;
+        Object.assign(mark.style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
+        layer.appendChild(mark);
+      }));
+    });
+  },[view,pdf,active?.highlights]);
 
   const addLocalFiles = useCallback(async files => {
     if (!db) return;
@@ -746,8 +776,7 @@ function App() {
               tabIndex={0}
               aria-label={"Open "+paper.name}
               onClick={() => openPaper(paper)}
-              onKeyDown={event => {
-                if (event.target !== event.currentTarget) return;
+              onKeyDown={event => {                if (event.target !== event.currentTarget) return;
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   openPaper(paper);
