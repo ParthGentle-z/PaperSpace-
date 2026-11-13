@@ -241,3 +241,54 @@
 .selection-menu-action:hover{background:var(--wash);color:var(--accent)}
 .selection-menu-dismiss{width:100%;margin-top:4px;padding:7px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--soft);font-size:11px;text-align:center;cursor:pointer}
 @media(max-width:650px){.selection-context-menu{width:min(250px,calc(100vw - 16px));}}
+
+
+/* High-contrast, continuous native text selection across PDF.js text spans */
+.pdf-text-layer,
+.pdf-text-layer *{
+  -webkit-user-select:text!important;
+  user-select:text!important;
+}
+.pdf-text-layer::selection,
+.pdf-text-layer *::selection,
+.pdf-text-layer span::selection{
+  background:rgba(93,72,220,.48)!important;
+  color:transparent!important;
+  text-shadow:none!important;
+}
+.pdf-text-layer span{
+  color:transparent!important;
+  -webkit-text-fill-color:transparent;
+}
+.selection-context-menu{
+  width:min(284px,calc(100vw - 16px));
+}
+.selection-menu-colors{
+  display:grid;
+  grid-template-columns:repeat(5,25px);
+  justify-content:start;
+  gap:11px 13px;
+  padding:10px 5px 12px;
+}
+.selection-menu-color{
+  width:25px;
+  height:25px;
+  border-radius:50%;
+  border:2px solid rgba(255,255,255,.95);
+  background:var(--swatch);
+  box-shadow:0 0 0 1px rgba(25,35,55,.2),inset 0 0 0 1px rgba(0,0,0,.05);
+  cursor:pointer;
+  transition:transform .12s ease,box-shadow .12s ease;
+}
+.selection-menu-color:hover{
+  transform:scale(1.12);
+  box-shadow:0 0 0 2px var(--accent);
+}
+.selection-menu-color:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+}
+@media(max-width:650px){
+  .selection-context-menu{width:min(276px,calc(100vw - 16px))}
+  .selection-menu-colors{grid-template-columns:repeat(5,24px);gap:10px 12px}
+}
