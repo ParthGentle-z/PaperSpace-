@@ -461,6 +461,9 @@ function App() {
     if (highlightClickTimerRef.current) window.clearTimeout(highlightClickTimerRef.current);
     setAnnotationPopup(null);
     setFocusedAnnotationId(highlight.id);
+    setAnnotationFilter("all");
+    setAnnotationSearch("");
+    setExpandedPaperIds(ids => active && !ids.includes(active.id) ? [...ids,active.id] : ids);
     setRoute("notes");
   },[readMode,setRoute]);
 
@@ -966,7 +969,7 @@ function App() {
                 <div className="annotation-read-head"><span>YOUR ANNOTATION</span><button className="quiet-icon" aria-label="Close annotation" onClick={()=>setAnnotationPopup(null)}><X size={14}/></button></div>
                 <div className="annotation-read-quote">{annotationPopup.highlight.text}</div>
                 {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}><span>YOUR NOTE · {dateLabel(item.created)}</span><p>{item.text}</p></article>) : <p className="helper-copy">No note is linked to this highlight yet.</p>}
-                <button className="text-link" onClick={()=>{setAnnotationPopup(null);setFocusedAnnotationId(annotationPopup.highlight.id);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
+                <button className="text-link" onClick={()=>{setAnnotationPopup(null);setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
               </div>}
               {contextMenu && <div className="selection-context-menu" role="menu" style={{left:contextMenu.x,top:contextMenu.y}} onMouseDown={event=>event.preventDefault()}>
                 <div className="selection-menu-label">SELECTED PASSAGE</div>
