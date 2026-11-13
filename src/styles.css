@@ -1055,3 +1055,28 @@
   min-height:28px;
   padding:5px 2px;
 }
+
+/* Annotation editor: collapse the passage preview whenever any note is being edited. */
+.reader-layout.annotation-open .annotation-read-popover:has(.annotation-editor) .annotation-read-quote{
+  display:none !important;
+}
+.reader-layout.annotation-open .annotation-read-popover:has(.annotation-editor) .annotation-notes-area{
+  padding-top:10px !important;
+  min-height:0 !important;
+}
+.reader-layout.annotation-open .annotation-read-popover:has(.annotation-editor) .annotation-note-meta{
+  position:sticky !important;
+  top:0 !important;
+  z-index:20 !important;
+  background:var(--surface2) !important;
+}
+.reader-layout.annotation-open .annotation-read-popover:has(.annotation-editor) .annotation-note-actions{
+  display:flex !important;
+  align-items:center !important;
+  gap:10px !important;
+}
+.reader-layout.annotation-open .annotation-read-popover:has(.annotation-editor) .annotation-editor textarea{
+  width:100% !important;
+  min-height:clamp(220px,38vh,460px) !important;
+  resize:vertical;
+}
