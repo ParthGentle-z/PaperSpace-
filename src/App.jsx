@@ -573,7 +573,8 @@ function App() {
         (item.anchor.highlightId === highlight.id || (item.page === highlight.page && item.anchor.text === highlight.text)));
       // Render the annotation in a dedicated right-hand reading column.
       // Keeping it out of the PDF canvas prevents it from covering the passage.
-      setAnnotationQuoteExpanded(false);\n      setAnnotationPopup({highlight,notes:linkedNotes});
+      setAnnotationQuoteExpanded(false);
+      setAnnotationPopup({highlight,notes:linkedNotes});
     },240);
   },[readMode,active]);
 
