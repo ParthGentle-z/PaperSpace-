@@ -337,6 +337,18 @@ function App() {
     setAnnotationMenuOpen(false);
   },[notify]);
 
+  const closeAnnotationPanel = useCallback(() => {
+    if (editingAnnotationNoteId && annotationDraft.trim()) {
+      const existing = annotationPopup?.notes?.find(item => item.id === editingAnnotationNoteId);
+      const unchanged = existing && existing.text === annotationDraft;
+      if (!unchanged && !window.confirm("Discard your unsaved annotation changes?")) return;
+    }
+    setAnnotationPopup(null);
+    setEditingAnnotationNoteId(null);
+    setAnnotationDraft("");
+    setAnnotationMenuOpen(false);
+  },[editingAnnotationNoteId,annotationDraft,annotationPopup]);
+
   const deleteAnnotationHighlight = useCallback(async () => {
     if (!annotationPopup?.highlight?.id) return;
     const id = annotationPopup.highlight.id;
@@ -1120,7 +1132,7 @@ function App() {
                   <span>YOUR ANNOTATION</span>
                   <div className="annotation-head-actions">
                     <button className="quiet-icon annotation-more-trigger" aria-label="More annotation options" aria-expanded={annotationMenuOpen} onClick={()=>setAnnotationMenuOpen(value=>!value)}><MoreHorizontal size={17}/></button>
-                    <button className="quiet-icon" aria-label="Close annotation" onClick={()=>{setAnnotationPopup(null);setEditingAnnotationNoteId(null);setAnnotationMenuOpen(false);}}><X size={14}/></button>
+                    <button className="quiet-icon" aria-label="Close annotation" onClick={closeAnnotationPanel}><X size={14}/></button>
                     {annotationMenuOpen && <div className="annotation-more-menu">
                       <button onClick={()=>copyAnnotationText(annotationPopup.highlight.text)}><Copy size={14}/>Copy highlighted passage</button>
                       <button onClick={()=>copyAnnotationText(annotationPopup.notes.map(item=>item.text).join("\\n\\n"))} disabled={!annotationPopup.notes.length}><Copy size={14}/>Copy saved notes</button>
@@ -1137,7 +1149,7 @@ function App() {
                     : <p>{item.text}</p>}
                 </article>) : editingAnnotationNoteId !== "__new__" && <div className="annotation-empty-note"><p>No note is linked to this highlight yet.</p><button onClick={()=>beginAnnotationEdit()}><Pencil size={13}/> Write a note for this passage</button></div>}
                 {editingAnnotationNoteId === "__new__" && <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save note</>}</button></div></div>}
-                <button className="text-link" onClick={()=>{setAnnotationPopup(null);setEditingAnnotationNoteId(null);setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
+                <button className="text-link" onClick={()=>{if(editingAnnotationNoteId && annotationDraft.trim() && !window.confirm("Discard your unsaved annotation changes before opening Research Notes?")) return; setAnnotationPopup(null);setEditingAnnotationNoteId(null);setAnnotationDraft("");setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
               </div>}
             <aside className="reader-side">
               <div className="reader-side-tabs">
