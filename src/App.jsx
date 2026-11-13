@@ -477,7 +477,7 @@ function App() {
     if (view !== "reader" || !pdf || !pendingAnnotationRef.current || !canvasHost.current) return;
     const target = pendingAnnotationRef.current;
     if (target.paperId !== activeId) return;
-    let cancelled = false, attempts = 0;
+    let cancelled = false, attempts = 0, timer = 0;
     const locate = () => {
       if (cancelled) return false;
       const root = canvasHost.current;
@@ -508,10 +508,10 @@ function App() {
     };
     const frame = () => {
       if (cancelled) return;
-      if (!locate() && attempts++ < 70) requestAnimationFrame(frame);
+      if (!locate() && attempts++ < 70) timer = window.setTimeout(frame,100);
     };
-    requestAnimationFrame(frame);
-    return () => {cancelled=true;};
+    frame();
+    return () => {cancelled=true;window.clearTimeout(timer);};
   },[view,pdf,activeId]);
 
   useEffect(() => {
