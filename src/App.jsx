@@ -94,6 +94,7 @@ function App() {
   const [selectedConcept,setSelectedConcept] = useState(concepts[0]);
   const [note,setNote] = useState("");
   const [selection,setSelection] = useState(null);
+  const [highlightColor,setHighlightColor] = useState("#ffe36b");
   const [readerTab,setReaderTab] = useState("notes");
   const [sidebarVisible,setSidebarVisible] = useState(() => localStorage.getItem("ps-sidebar") !== "hidden");
   const [mobileSidebar,setMobileSidebar] = useState(false);
@@ -218,12 +219,12 @@ function App() {
 
   const saveHighlight = useCallback(async () => {
     if (!db || !active || !selection) return;
-    const updated = {...active,highlights:[...(active.highlights || []),{id:crypto.randomUUID(),...selection,color:"#ffe36b",created:Date.now()}]};
+    const updated = {...active,highlights:[...(active.highlights || []),{id:crypto.randomUUID(),...selection,color:highlightColor,created:Date.now()}]};
     await dbPut(db,updated);
     setPapers(items => items.map(item => item.id === updated.id ? updated : item));
     setSelection(null); window.getSelection()?.removeAllRanges();
     notify("Highlight saved.");
-  },[db,active,selection,notify]);
+  },[db,active,selection,highlightColor,notify]);
 
   const removeHighlight = useCallback(async id => {
     if (!db || !active) return;
@@ -250,10 +251,12 @@ function App() {
     const layer = sheet.querySelector(".pdf-text-layer");
     if (!layer) return;
     const origin = layer.getBoundingClientRect();
+    const sheetBounds = sheet.getBoundingClientRect();
     const rects = Array.from(range.getClientRects()).map(rect => ({
-      x:rect.left-origin.left, y:rect.top-origin.top, w:rect.width, h:rect.height
-    })).filter(rect => rect.w > 0 && rect.h > 0);
-    if (rects.length) setSelection({text,page:Number(sheet.dataset.page),rects});
+      x:(rect.left-origin.left)/origin.width, y:(rect.top-origin.top)/origin.height,
+      w:rect.width/origin.width, h:rect.height/origin.height
+    })).filter(rect => rect.w > 0 && rect.h > 0 && rect.left >= sheetBounds.left && rect.right <= sheetBounds.right + 1);
+    if (rects.length) setSelection({text,page:Number(sheet.dataset.page),rects,normalized:true});
   },[]);
 
   const scrollToPage = useCallback(target => {
@@ -262,111 +265,156 @@ function App() {
     setPage(target);
   },[]);
 
-  // Render pages as a continuous stack. Cancel stale renders and preserve the reader scroll position on resize/zoom.
+  // Render pages concurrently into stable page shells. A generation token prevents stale
+  // resize/zoom renders from replacing the currently selected document.
   useEffect(() => {
     if (!pdf || !canvasHost.current) return;
     let cancelled = false;
-    let renderSequence = 0;
-    let renderTimer = 0;
-    const tasks = [];
+    let generation = 0;
+    let resizeTimer = 0;
+    const tasks = new Set();
     const root = canvasHost.current;
+
     const render = async () => {
-      const sequence = ++renderSequence;
-      tasks.forEach(task => task.cancel?.());
-      tasks.length = 0;
-      const previousScrollTop = root.scrollTop;
-      root.innerHTML = "";
-      try {
-        for (let number=1; number<=pdf.numPages; number++) {
-          if (cancelled || sequence !== renderSequence) return;
-          const pdfPage = await pdf.getPage(number);
-          const baseViewport = pdfPage.getViewport({scale:1});
-          const available = Math.max(240,root.clientWidth-44);
-          const scale = fit ? Math.min(2.5,available/baseViewport.width) : zoom;
-          const viewport = pdfPage.getViewport({scale});
-          const sheet = document.createElement("article");
-          sheet.className = "pdf-sheet";
-          sheet.dataset.page = String(number);
-          const canvas = document.createElement("canvas");
-          const context = canvas.getContext("2d");
-          const ratio = Math.min(window.devicePixelRatio || 1,2);
-          canvas.width = Math.floor(viewport.width*ratio);
-          canvas.height = Math.floor(viewport.height*ratio);
-          canvas.style.width = viewport.width+"px";
-          canvas.style.height = viewport.height+"px";
-          context.setTransform(ratio,0,0,ratio,0,0);
-          sheet.appendChild(canvas);
-          root.appendChild(sheet);
-          const task = pdfPage.render({canvasContext:context,viewport});
-          tasks.push(task);
-          await task.promise;
-          if (cancelled || sequence !== renderSequence) return;
-          const textContent = await pdfPage.getTextContent();
-          if (cancelled || sequence !== renderSequence) return;
-          const layer = document.createElement("div");
-          layer.className = "pdf-text-layer";
-          layer.style.width = viewport.width+"px";
-          layer.style.height = viewport.height+"px";
-          for (const item of textContent.items) {
-            if (!item.str || !item.transform) continue;
-            const transform = pdfjs.Util.transform(viewport.transform,item.transform);
-            const height = Math.hypot(transform[2],transform[3]);
-            const span = document.createElement("span");
-            span.textContent = item.str;
-            span.style.left = transform[4]+"px";
-            span.style.top = (transform[5]-height)+"px";
-            span.style.fontSize = height+"px";
-            span.style.fontFamily = item.fontName || "sans-serif";
-            span.style.transform = "scaleX("+Math.max(.1,Math.hypot(transform[0],transform[1])/(height||1))+")";
-            span.style.transformOrigin = "left top";
-            layer.appendChild(span);
-          }
-          sheet.appendChild(layer);
-          for (const highlight of (active?.highlights || []).filter(item => item.page === number)) {
-            for (const rect of highlight.rects || []) {
-              const mark = document.createElement("div");
-              mark.className = "saved-highlight";
-              mark.style.background = highlight.color || "#ffe36b";
-              Object.assign(mark.style,{left:rect.x+"px",top:rect.y+"px",width:rect.w+"px",height:rect.h+"px"});
-              layer.appendChild(mark);
+      const current = ++generation;
+      tasks.forEach(task => { try { task.cancel(); } catch {} });
+      tasks.clear();
+      const oldScrollTop = root.scrollTop;
+      root.replaceChildren();
+      setPdfError("");
+
+      const availableWidth = Math.max(280, root.clientWidth - 36);
+      const ratio = Math.min(window.devicePixelRatio || 1, 2.5);
+      const pages = [];
+
+      // Create all page shells first so the reader has a stable, scrollable document.
+      for (let number = 1; number <= pdf.numPages; number++) {
+        const shell = document.createElement("article");
+        shell.className = "pdf-sheet pdf-sheet-loading";
+        shell.dataset.page = String(number);
+        const canvas = document.createElement("canvas");
+        const layer = document.createElement("div");
+        layer.className = "pdf-text-layer";
+        shell.append(canvas, layer);
+        root.appendChild(shell);
+        pages.push({number, shell, canvas, layer});
+      }
+
+      let nextIndex = 0;
+      const renderWorker = async () => {
+        while (!cancelled && current === generation && nextIndex < pages.length) {
+          const entry = pages[nextIndex++];
+          try {
+            const pdfPage = await pdf.getPage(entry.number);
+            if (cancelled || current !== generation) return;
+            const baseViewport = pdfPage.getViewport({scale:1});
+            const scale = fit ? Math.min(2.5, availableWidth / baseViewport.width) : zoom;
+            const viewport = pdfPage.getViewport({scale});
+            const canvas = entry.canvas;
+            const context = canvas.getContext("2d", {alpha:false});
+            if (!context) throw new Error("Canvas rendering is unavailable in this browser.");
+            canvas.width = Math.floor(viewport.width * ratio);
+            canvas.height = Math.floor(viewport.height * ratio);
+            canvas.style.width = viewport.width + "px";
+            canvas.style.height = viewport.height + "px";
+            entry.shell.style.width = viewport.width + "px";
+            entry.shell.style.height = viewport.height + "px";
+            entry.layer.style.width = viewport.width + "px";
+            entry.layer.style.height = viewport.height + "px";
+            const task = pdfPage.render({canvasContext:context,viewport,transform:[ratio,0,0,ratio,0,0],background:"#ffffff"});
+            tasks.add(task);
+            await task.promise;
+            tasks.delete(task);
+            if (cancelled || current !== generation) return;
+
+            const textContent = await pdfPage.getTextContent();
+            if (cancelled || current !== generation) return;
+            const measure = document.createElement("canvas").getContext("2d");
+            const fragment = document.createDocumentFragment();
+            for (const item of textContent.items) {
+              if (!item.str || !item.transform || typeof item.width !== "number") continue;
+              const transform = pdfjs.Util.transform(viewport.transform,item.transform);
+              const fontHeight = Math.max(1,Math.hypot(transform[2],transform[3]));
+              const angle = Math.atan2(transform[1],transform[0]);
+              const span = document.createElement("span");
+              span.textContent = item.str;
+              span.style.left = transform[4] + "px";
+              span.style.top = (transform[5] - fontHeight) + "px";
+              span.style.fontSize = fontHeight + "px";
+              span.style.fontFamily = "sans-serif";
+              measure.font = fontHeight + "px sans-serif";
+              const naturalWidth = Math.max(1,measure.measureText(item.str).width);
+              const targetWidth = Math.max(0,item.width * scale);
+              span.style.transform = "rotate(" + angle + "rad) scaleX(" + Math.max(.01,targetWidth/naturalWidth) + ")";
+              span.style.transformOrigin = "left top";
+              fragment.appendChild(span);
             }
+            entry.layer.appendChild(fragment);
+
+            for (const highlight of (active?.highlights || []).filter(item => item.page === entry.number)) {
+              for (const rect of highlight.rects || []) {
+                const mark = document.createElement("div");
+                mark.className = "saved-highlight";
+                mark.style.background = highlight.color || "#ffe36b";
+                const x = highlight.normalized ? rect.x * viewport.width : rect.x;
+                const y = highlight.normalized ? rect.y * viewport.height : rect.y;
+                const w = highlight.normalized ? rect.w * viewport.width : rect.w;
+                const h = highlight.normalized ? rect.h * viewport.height : rect.h;
+                Object.assign(mark.style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
+                entry.layer.appendChild(mark);
+              }
+            }
+            entry.shell.classList.remove("pdf-sheet-loading");
+          } catch (error) {
+            if (error?.name === "RenderingCancelledException" || cancelled || current !== generation) return;
+            console.error("PDF page render error",entry.number,error);
+            entry.shell.classList.add("pdf-sheet-error");
+            entry.shell.textContent = "Page " + entry.number + " could not be rendered. Try reopening this paper.";
+            throw error;
           }
         }
-        if (!cancelled && sequence === renderSequence) root.scrollTop = previousScrollTop;
+      };
+
+      try {
+        await Promise.all(Array.from({length:Math.min(3,pages.length)},() => renderWorker()));
+        if (!cancelled && current === generation) root.scrollTop = oldScrollTop;
       } catch (error) {
-        if (error?.name !== "RenderingCancelledException" && !cancelled && sequence === renderSequence) {
+        if (!cancelled && current === generation && error?.name !== "RenderingCancelledException") {
           console.error("PDF render error",error);
-          setPdfError("The PDF could not be rendered completely. Try Fit width or reopen the file.");
+          setPdfError("Some pages could not be rendered. Reopen the paper or try another PDF.");
         }
       }
     };
+
     const observer = new ResizeObserver(() => {
-      window.clearTimeout(renderTimer);
-      renderTimer = window.setTimeout(() => { if (!cancelled) render(); },120);
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => { if (!cancelled) render(); },180);
     });
     observer.observe(root);
     render();
+
     const onScroll = () => {
       const sheets = Array.from(root.querySelectorAll(".pdf-sheet"));
       if (!sheets.length) return;
-      const line = root.getBoundingClientRect().top + 30;
+      const line = root.getBoundingClientRect().top + 34;
       let nearest = sheets[0], distance = Infinity;
       for (const sheet of sheets) {
-        const currentDistance = Math.abs(sheet.getBoundingClientRect().top-line);
-        if (currentDistance < distance) { nearest = sheet; distance = currentDistance; }
+        const d = Math.abs(sheet.getBoundingClientRect().top - line);
+        if (d < distance) { nearest = sheet; distance = d; }
       }
       setPage(Number(nearest.dataset.page));
     };
     root.addEventListener("scroll",onScroll,{passive:true});
     return () => {
       cancelled = true;
-      window.clearTimeout(renderTimer);
+      window.clearTimeout(resizeTimer);
       observer.disconnect();
-      renderSequence++;
-      tasks.forEach(task => task.cancel?.());
+      generation++;
+      tasks.forEach(task => { try { task.cancel(); } catch {} });
+      tasks.clear();
       root.removeEventListener("scroll",onScroll);
     };
-  },[pdf,zoom,fit,activeId,active?.highlights?.length,active?.highlights?.map(highlight=>highlight.id).join(",")]);
+  },[pdf,zoom,fit,activeId,active?.highlights?.map(item => item.id + ":" + (item.color || "")).join(",")]);
 
   const addLocalFiles = useCallback(async files => {
     if (!db) return;
@@ -546,12 +594,14 @@ function App() {
                   <button className="icon-btn" disabled={!pdf || page >= pdf.numPages} onClick={() => scrollToPage(Math.min(pdf?.numPages || page,page+1))}><ChevronRight size={17}/></button>
                 </div>
                 <div className="toolbar-tools">
-                  {selection && <button className="tool-btn highlight-action" onClick={saveHighlight}><Highlighter size={14}/> Save highlight</button>}
+                  {selection && <><div className="highlight-colors" aria-label="Highlight colour">
+                    {["#ffe36b","#a7e8bd","#9ed8ff","#f6b0ca"].map(color=><button key={color} type="button" className={"highlight-swatch "+(highlightColor===color?"active":"")} style={{"--swatch":color}} aria-label={"Choose "+color+" highlight"} title={"Highlight colour "+color} onClick={()=>setHighlightColor(color)}/>)}
+                  </div><button className="tool-btn highlight-action" onClick={saveHighlight}><Highlighter size={14}/> Save highlight</button></>}
                   <button className={"tool-btn "+(fit ? "selected" : "")} onClick={() => setFit(true)}><Maximize2 size={14}/> Fit width</button>
                   <button className="icon-btn" disabled={!pdf} onClick={() => {setFit(false);setZoom(value=>Math.max(.55,value-.15));}} title="Zoom out"><ZoomOut size={16}/></button>
                   <span className="zoom-value">{fit ? "Fit" : Math.round(zoom*100)+"%"}</span>
                   <button className="icon-btn" disabled={!pdf} onClick={() => {setFit(false);setZoom(value=>Math.min(2.5,value+.15));}} title="Zoom in"><ZoomIn size={16}/></button>
-                  <button className="tool-btn undo-highlight" disabled={!activeHighlights.length} onClick={undoLastHighlight} title="Undo last highlight"><RefreshCw size={14}/> Undo highlight</button>
+                  <button className="tool-btn undo-highlight" disabled={!activeHighlights.length} onClick={undoLastHighlight} title="Remove only the most recently saved highlight"><RefreshCw size={14}/> Undo last</button>
                 </div>
               </div>
               {pdfError ? <div className="reader-error">{pdfError}</div> : !pdf ? <div className="reader-empty"><FileText size={34}/><h2>Open a paper to read</h2><p>Choose a file from Open papers on the left, or return to the Library to add one.</p><button className="button button-primary" onClick={() => setRoute("library")}>Go to library</button></div> :
