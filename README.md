@@ -1,26 +1,30 @@
 # PaperSpace
 
-A local-first research paper library and reading workspace.
+A local-first research paper reading and thinking workspace built with **React + Vite**.
 
-## Features in this first deployment
-- Upload and store PDF papers in browser IndexedDB
-- Open and read PDFs with PDF.js
-- Page navigation
-- Per-paper reading notes linked to page numbers
-- Search paper titles
-- Starter concept desk with explanations for topology terms
-- Export notes metadata as JSON
-- Dark/light theme toggle
-- GitHub Pages deployment
+## Current features
+- Responsive research library with PDF upload
+- PDF reader with page navigation, fit-to-width, and zoom controls
+- Reading notes linked to paper and page
+- Notes overview and JSON export
+- Concept desk with a guided usage manual, glossary search, intuitive explanations, and research examples
+- Consistent dark/light themes across the full interface
+- Browser IndexedDB storage; PDFs are not uploaded to GitHub
 
 ## Run locally
-Open `index.html` in a local static server, for example:
-`python -m http.server 8000`
-Then visit http://localhost:8000.
+```bash
+npm install
+npm run dev
+```
 
-## Deploy
-GitHub Actions deploys the repository root to GitHub Pages on pushes to `main`.
-In repository Settings → Pages, choose **GitHub Actions** as the build and deployment source.
+## Build
+```bash
+npm run build
+npm run preview
+```
+
+## GitHub Pages
+GitHub Actions installs dependencies, builds the Vite app, and deploys the `dist` directory. Vite is configured for this repository path: `/PaperSpace-/`.
 
 ## Privacy and limitations
-PDFs and notes are stored in this browser's IndexedDB. They are not uploaded to GitHub. Data is device/browser-specific; export backups regularly. The concept desk currently uses a small built-in glossary, not generative AI. A genuine local browser model and persistent text highlights are future milestones. PDF.js is loaded from a public CDN, so initial reading requires an internet connection.
+PDFs and notes are stored in this browser's IndexedDB. They do not sync between devices and are not uploaded to GitHub. Export notes regularly; the current JSON export does not include PDF files. The concept desk currently contains curated starter explanations, not generative AI. A local in-browser model, persistent PDF text highlights, and cross-paper semantic search are future milestones.
