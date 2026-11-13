@@ -297,8 +297,7 @@ function App() {
         return overlap >= Math.min(item.bottom-item.top, rect.bottom-rect.top) * 0.55;
       });
       if (line) {
-        line.rects.push(rect);
-        line.top = Math.min(line.top,rect.top);
+        line.rects.push(rect);        line.top = Math.min(line.top,rect.top);
         line.bottom = Math.max(line.bottom,rect.bottom);
       } else {
         lines.push({top:rect.top,bottom:rect.bottom,rects:[rect]});
@@ -597,8 +596,7 @@ function App() {
     await refresh(); notify("PDFs added to your private library.");
   },[db,refresh,notify]);
 
-  const exportNotes = useCallback(() => {
-    const payload = JSON.stringify({exportedAt:new Date().toISOString(),papers:papers.map(({blob,...item})=>item)},null,2);
+  const exportNotes = useCallback(() => {    const payload = JSON.stringify({exportedAt:new Date().toISOString(),papers:papers.map(({blob,...item})=>item)},null,2);
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([payload],{type:"application/json"}));
     link.download = "paperspace-research-backup.json"; link.click(); URL.revokeObjectURL(link.href);
@@ -778,6 +776,7 @@ function App() {
                     if (!captured) { selectionRef.current = null; selectionBoundsRef.current = null; setSelection(null); }
                   }));
                 }} onTouchEnd={() => requestAnimationFrame(captureSelection)} onContextMenu={handlePdfContextMenu}/>
+              }
               {contextMenu && <div className="selection-context-menu" role="menu" style={{left:contextMenu.x,top:contextMenu.y}} onMouseDown={event=>event.preventDefault()}>
                 <div className="selection-menu-label">SELECTED PASSAGE</div>
                 <p className="selection-menu-quote">{contextMenu.text}</p>
