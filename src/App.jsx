@@ -482,7 +482,7 @@ function App() {
       <main className="main-area">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="icon-btn sidebar-toggle" title={sidebarVisible ? (sidebarCollapsed ? "Expand menu" : "Hide menu") : "Show menu"}
+            <button className="icon-btn sidebar-toggle" title={sidebarVisible ? "Hide menu" : "Show menu"}
               onClick={() => { if (window.matchMedia("(max-width: 820px)").matches) { if (!sidebarVisible) { setSidebarVisible(true); setMobileSidebar(true); } else setMobileSidebar(v=>!v); } else { setSidebarVisible(v=>!v); } }}>
               {sidebarVisible ? <PanelLeftClose size={17}/> : <Menu size={17}/>}
             </button>
