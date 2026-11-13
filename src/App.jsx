@@ -344,7 +344,7 @@ function App() {
         renderTasks.set(entry.number,task);
         await task.promise;
         renderTasks.delete(entry.number);
-        if (cancelled || currentGeneration !== generation) return;
+        if (cancelled || currentGeneration !== generation || entry.token !== entryToken) return;
 
         const textContent = await pdfPage.getTextContent();
         if (cancelled || currentGeneration !== generation || entry.token !== entryToken) return;
