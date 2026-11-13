@@ -102,7 +102,7 @@ function App() {
   const [editingAnnotationNoteId,setEditingAnnotationNoteId] = useState(null);
   const [annotationDraft,setAnnotationDraft] = useState("");
   const [annotationMenuOpen,setAnnotationMenuOpen] = useState(false);
-  const [annotationSaveBusy,setAnnotationSaveBusy] = useState(false);
+  const [annotationSaveBusy,setAnnotationSaveBusy] = useState(false);\n  const [annotationQuoteExpanded,setAnnotationQuoteExpanded] = useState(false);
   const [focusedAnnotationId,setFocusedAnnotationId] = useState("");
   const [annotationSearch,setAnnotationSearch] = useState("");
   const [annotationFilter,setAnnotationFilter] = useState("all");
@@ -380,13 +380,48 @@ function App() {
     const layer = sheet.querySelector(".pdf-text-layer");
     if (!layer || !layer.contains(range.startContainer) || !layer.contains(range.endContainer)) return null;
 
-    // The DOM Range is the single source of truth for both quote and geometry.
-    // range.toString() preserves the browser's actual selected text; getClientRects()
-    // returns the painted line fragments of that exact same range.
-    const text = range.toString();
-    if (!text || !text.trim()) return null;
-
+    // Build the quote from the exact selected text-node fragments. PDF.js places
+    // separate spans at absolute coordinates; Range.toString() concatenates those
+    // fragments without consistently restoring the visual spaces between spans.
     const pageBounds = sheet.getBoundingClientRect();
+    const walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+    const fragments = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue?.length) continue;
+      const nodeRange = document.createRange();
+      nodeRange.selectNodeContents(node);
+      if (!range.intersectsNode(node)) continue;
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.nodeValue.length;
+      if (end <= start) continue;
+      nodeRange.setStart(node,start);
+      nodeRange.setEnd(node,end);
+      const value = node.nodeValue.slice(start,end);
+      const rect = Array.from(nodeRange.getClientRects()).find(item => item.width > .5 && item.height > .5);
+      if (value && rect) fragments.push({value,rect,fontSize:parseFloat(getComputedStyle(node.parentElement).fontSize)||12});
+    }
+    if (!fragments.length) return null;
+    const joinFragments = [];
+    for (const fragment of fragments) {
+      const previous = joinFragments[joinFragments.length-1];
+      if (previous) {
+        const verticalGap = fragment.rect.top - previous.rect.top;
+        const lineHeight = Math.max(previous.rect.height,fragment.rect.height);
+        const horizontalGap = fragment.rect.left - previous.rect.right;
+        const explicitSpace = /\\s$/.test(previous.value) || /^\\s/.test(fragment.value);
+        if (verticalGap > lineHeight * .75) {
+          joinFragments.push({value:verticalGap > lineHeight * 1.45 ? "\\n\\n" : "\\n"});
+        } else if (!explicitSpace && horizontalGap > Math.max(1.25,Math.min(previous.fontSize,fragment.fontSize)*.16)) {
+          joinFragments.push({value:" "});
+        }
+      }
+      joinFragments.push(fragment);
+    }
+    const text = joinFragments.map(item=>item.value).join("").replace(/[ \\t]+\\n/g,"\\n").replace(/\\n[ \\t]+/g,"\\n").trim();
+    if (!text) return null;
+
+
     if (pageBounds.width <= 0 || pageBounds.height <= 0) return null;
     const rawRects = Array.from(range.getClientRects()).filter(rect =>
       rect.width > 0.5 && rect.height > 0.5 &&
@@ -539,7 +574,7 @@ function App() {
         (item.anchor.highlightId === highlight.id || (item.page === highlight.page && item.anchor.text === highlight.text)));
       // Render the annotation in a dedicated right-hand reading column.
       // Keeping it out of the PDF canvas prevents it from covering the passage.
-      setAnnotationPopup({highlight,notes:linkedNotes});
+      setAnnotationQuoteExpanded(false);\n      setAnnotationPopup({highlight,notes:linkedNotes});
     },240);
   },[readMode,active]);
 
@@ -1140,7 +1175,8 @@ function App() {
                     </div>}
                   </div>
                 </div>
-                <div className="annotation-read-quote">{annotationPopup.highlight.text}</div>
+                <div className={"annotation-read-quote "+(annotationQuoteExpanded ? "expanded" : "compact")}><span>{annotationPopup.highlight.text}</span></div>
+                {(annotationPopup.highlight.text || "").length > 190 && <button className="annotation-quote-toggle" onClick={()=>setAnnotationQuoteExpanded(value=>!value)}>{annotationQuoteExpanded ? "Show less" : "Read full highlighted passage"} <ChevronDown size={12}/></button>}
                 <div className="annotation-section-label"><span>MY NOTES</span><button className="annotation-add-note" onClick={()=>beginAnnotationEdit()}><Plus size={13}/> Add note</button></div>
                 {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}>
                   <div className="annotation-note-meta"><span>YOUR NOTE · {dateLabel(item.created)}</span><button className="annotation-edit-button" onClick={()=>beginAnnotationEdit(item)}><Pencil size={12}/> Edit</button></div>
