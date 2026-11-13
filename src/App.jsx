@@ -733,6 +733,10 @@ function App() {
       pageHighlights.forEach(highlight => (highlight.rects || []).forEach(rect => {
         const mark = document.createElement("div");
         mark.className = "saved-highlight";
+        mark.dataset.annotationId = highlight.id;
+        mark.dataset.page = String(highlight.page);
+        mark.setAttribute("role","button");
+        mark.setAttribute("aria-label","Saved highlight: "+(highlight.text || "").slice(0,100));
         mark.style.background = highlight.color || "#ffe36b";
         const x = highlight.normalized ? rect.x * width : rect.x;
         const y = highlight.normalized ? rect.y * height : rect.y;
