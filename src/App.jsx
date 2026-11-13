@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import "pdfjs-dist/web/pdf_viewer.css";
 import "./styles.css";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
