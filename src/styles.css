@@ -540,3 +540,28 @@
   .reader-layout.annotation-open .annotation-read-quote,
   .reader-layout.annotation-open .annotation-read-note p{font-size:14px}
 }
+
+
+/* Annotation editor: inline editing, explicit save state and compact action menu */
+.annotation-head-actions{position:relative;display:flex;align-items:center;gap:5px}
+.annotation-more-trigger{width:30px;height:30px;min-width:30px}
+.annotation-more-menu{position:absolute;right:32px;top:34px;z-index:8;min-width:218px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px #080d1b30}
+.annotation-more-menu button{width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;border-radius:7px;background:transparent;color:var(--text);font-size:12px;text-align:left;cursor:pointer}
+.annotation-more-menu button:hover{background:var(--wash);color:var(--accent)}
+.annotation-more-menu button:disabled{opacity:.4;cursor:not-allowed}
+.annotation-more-menu button.danger{color:#d46a75}
+.annotation-section-label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 2px;color:var(--soft);font-size:10px;font-weight:800;letter-spacing:1.2px}
+.annotation-add-note,.annotation-edit-button{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;padding:5px 2px}
+.annotation-note-meta{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.annotation-edit-button{flex:none}
+.annotation-editor{margin-top:9px;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--surface2)}
+.annotation-editor textarea{display:block;width:100%;min-height:138px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font:14px/1.75 inherit;outline:none}
+.annotation-editor textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
+.annotation-editor-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+.annotation-empty-note{padding:13px;border:1px dashed var(--line);border-radius:9px;background:var(--surface2)}
+.annotation-empty-note p{margin:0 0 8px;color:var(--muted);font-size:12px}
+.annotation-empty-note button{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;padding:3px 0}
+.annotation-read-note{min-width:0}
+.annotation-read-note p{overflow-wrap:anywhere}
+.annotation-read-note .annotation-editor textarea{font-size:14px}
+@media(max-width:640px){.annotation-editor textarea{min-height:112px}.annotation-more-menu{right:28px;min-width:200px}}
