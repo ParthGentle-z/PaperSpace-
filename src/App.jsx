@@ -150,7 +150,7 @@ function App() {
   const [driveBusy,setDriveBusy] = useState(false);
   const [driveMessage,setDriveMessage] = useState("");
   const [driveAuthorized,setDriveAuthorized] = useState(false);
-  const [driveFolder,setDriveFolder] = useState(() => readJson("ps-drive-folder",null));
+  const [driveSelection,setDriveSelection] = useState(() => readJson("ps-drive-selection",[]));
   const canvasHost = useRef(null);
   const activeHighlightsRef = useRef([]);
   // Snapshot the drag selection before the browser handles the right-click.
@@ -244,7 +244,7 @@ function App() {
   useEffect(() => { localStorage.setItem("ps-sidebar",sidebarVisible ? "visible" : "hidden"); },[sidebarVisible]);
   useEffect(() => { localStorage.setItem("ps-read-mode",readMode ? "on" : "off"); },[readMode]);
   useEffect(() => { localStorage.setItem("ps-expanded-note-papers",JSON.stringify(expandedPaperIds)); },[expandedPaperIds]);
-  useEffect(() => { localStorage.setItem("ps-drive-folder",JSON.stringify(driveFolder)); },[driveFolder]);
+  useEffect(() => { localStorage.setItem("ps-drive-selection",JSON.stringify(driveSelection)); },[driveSelection]);
 
   const setRoute = useCallback((route,replace=false) => {
     const target = route === "reader" ? BASE+"Reading" : BASE;
@@ -1128,30 +1128,51 @@ function App() {
     link.download = "paperspace-research-backup.json"; link.click(); URL.revokeObjectURL(link.href);
   },[papers]);
 
-  const importDriveFolder = useCallback(async folder => {
+  const importDriveFiles = useCallback(async files => {
     const session = driveTokenRef.current;
     if (!session?.accessToken || Date.now() >= session.expiresAt - 60000) {
       driveTokenRef.current = null;
       setDriveAuthorized(false);
-      throw new Error("Your temporary Google Drive permission has expired. Reconnect Drive and choose the folder again.");
+      throw new Error("Your temporary Google Drive permission has expired. Reconnect Drive and select the PDFs again.");
     }
     const token = session.accessToken;
-    const q = encodeURIComponent("'"+folder.id+"' in parents and mimeType='application/pdf' and trashed=false");
-    const response = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id,name,mimeType,modifiedTime,size)&pageSize=100",{
-      headers:{Authorization:"Bearer "+token}
-    });
-    if (!response.ok) throw new Error("Drive folder could not be read. Check that the selected folder is shared with PaperSpace.");
-    const data = await response.json();
-    if (!data.files?.length) { setDriveMessage("No PDFs were found directly inside that folder."); return; }
-    for (const file of data.files) {
-      const media = await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(file.id)+"?alt=media",{headers:{Authorization:"Bearer "+token}});
-      if (!media.ok) continue;
+    const selected = (files || []).filter(file => file?.id && file.mimeType === "application/pdf");
+    if (!selected.length) {
+      setDriveMessage("No PDF files were selected. No Drive files were downloaded.");
+      return;
+    }
+    let imported = 0;
+    for (const file of selected) {
+      const media = await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(file.id)+"?alt=media",{
+        headers:{Authorization:"Bearer "+token}
+      });
+      if (!media.ok) {
+        if (media.status === 401) {
+          driveTokenRef.current = null;
+          setDriveAuthorized(false);
+          throw new Error("Google Drive permission expired. Reconnect and select the PDFs again.");
+        }
+        continue;
+      }
       const blob = await media.blob();
-      await dbPut(db,{id:"drive-"+file.id,name:file.name,blob,added:Date.now(),notes:[],highlights:[],provider:"google-drive",driveId:file.id,driveFolderId:folder.id});
+      await dbPut(db,{
+        id:"drive-"+file.id,
+        name:file.name || "Untitled PDF",
+        blob,
+        added:Date.now(),
+        notes:[],
+        highlights:[],
+        provider:"google-drive",
+        driveId:file.id,
+        driveFileId:file.id,
+        driveFileName:file.name || "Untitled PDF"
+      });
+      imported++;
     }
     await refresh();
-    setDriveMessage("Imported "+data.files.length+" PDF(s) from “"+folder.name+"”. Local copies are stored in this browser.");
-    notify("Google Drive folder imported.");
+    setDriveSelection(selected.map(file=>({id:file.id,name:file.name || "Untitled PDF"})));
+    setDriveMessage("Imported "+imported+" of "+selected.length+" selected PDF(s). Copies are stored in this browser; Drive originals are unchanged.");
+    if (imported) notify("Selected Drive PDFs imported.");
   },[db,refresh,notify]);
 
   const connectGoogleDrive = useCallback(async () => {
@@ -1165,58 +1186,68 @@ function App() {
         loadScript("https://apis.google.com/js/api.js"),
         loadScript("https://accounts.google.com/gsi/client")
       ]);
-      await new Promise(resolve => window.gapi.load("picker",{callback:resolve}));
+      await new Promise((resolve,reject) => {
+        try { window.gapi.load("picker",{callback:resolve,onerror:reject,timeout:10000,ontimeout:reject}); }
+        catch(error) { reject(error); }
+      });
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id:DRIVE.clientId,
         scope:"https://www.googleapis.com/auth/drive.file",
         callback:async response => {
-          if (response.error) { setDriveBusy(false); setDriveMessage("Google authorisation was not completed."); return; }
-          if (!response.access_token) {
+          if (response.error || !response.access_token) {
             driveTokenRef.current = null;
             setDriveAuthorized(false);
             setDriveBusy(false);
-            setDriveMessage("Google did not return an access token. No Drive files were accessed.");
+            setDriveMessage("Google Drive authorization was not completed. No files were accessed.");
             return;
           }
           driveTokenRef.current = {
-            accessToken: response.access_token,
-            expiresAt: Date.now() + Math.max(0, Number(response.expires_in) || 3600) * 1000
+            accessToken:response.access_token,
+            expiresAt:Date.now()+Math.max(0,Number(response.expires_in)||3600)*1000
           };
           setDriveAuthorized(true);
-          const pickerView = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
-            .setIncludeFolders(true).setSelectFolderEnabled(true);
+          const pdfView = new window.google.picker.DocsView(window.google.picker.ViewId.DOCS)
+            .setMimeTypes("application/pdf")
+            .setIncludeFolders(false);
           const picker = new window.google.picker.PickerBuilder()
-            .addView(pickerView).setOAuthToken(response.access_token)
-            .setDeveloperKey(DRIVE.apiKey).setAppId(DRIVE.appId)
-            .setTitle("Choose a PaperSpace research folder")
+            .addView(pdfView)
+            .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
+            .setOAuthToken(response.access_token)
+            .setDeveloperKey(DRIVE.apiKey)
+            .setAppId(DRIVE.appId)
+            .setTitle("Choose PDF files to share with PaperSpace")
             .setCallback(async data => {
-              if (data.action !== window.google.picker.Action.PICKED) { setDriveBusy(false); return; }
-              const doc = data.docs?.[0];
-              if (!doc) { setDriveBusy(false); return; }
-              const folder = {id:doc.id,name:doc.name || "Selected Drive folder"};
-              setDriveFolder(folder);
-              try { await importDriveFolder(folder); }
-              catch (error) { setDriveMessage(error.message || "Drive import failed."); }
+              if (data.action !== window.google.picker.Action.PICKED) {
+                setDriveBusy(false);
+                return;
+              }
+              try { await importDriveFiles(data.docs || []); }
+              catch(error) { setDriveMessage(error.message || "Selected Drive PDFs could not be imported."); }
               finally { setDriveBusy(false); }
             }).build();
           picker.setVisible(true);
         }
       });
       tokenClient.requestAccessToken({prompt:"consent"});
-    } catch (error) {
-      console.error(error); setDriveBusy(false);
+    } catch(error) {
+      console.error(error);
+      driveTokenRef.current = null;
+      setDriveAuthorized(false);
+      setDriveBusy(false);
       setDriveMessage("Google Picker could not be loaded. Check API activation and authorised website origins.");
     }
-  },[importDriveFolder]);
+  },[importDriveFiles]);
 
   const disconnectGoogleDrive = useCallback(() => {
-    // Google Identity Services access tokens are short-lived and held only in memory.
-    // Clearing this reference disconnects this PaperSpace browser session.
+    const token = driveTokenRef.current?.accessToken;
     driveTokenRef.current = null;
     setDriveAuthorized(false);
-    setDriveFolder(null);
-    localStorage.removeItem("ps-drive-folder");
-    setDriveMessage("Drive disconnected from this PaperSpace session. Previously imported local PDF copies are unchanged.");
+    setDriveSelection([]);
+    localStorage.removeItem("ps-drive-selection");
+    if (token && window.google?.accounts?.oauth2?.revoke) {
+      try { window.google.accounts.oauth2.revoke(token,()=>{}); } catch { /* local disconnect still succeeds */ }
+    }
+    setDriveMessage("Drive disconnected and its temporary app grant revoked where supported. Previously imported local PDF copies are unchanged.");
   },[]);
 
   const closeSidebarPaper = id => closeOpenPaper(id);
@@ -1284,10 +1315,10 @@ function App() {
           </div>
           <section className="drive-card">
             <div className="drive-card-icon"><Cloud size={21}/></div>
-            <div className="drive-card-copy"><h2>Google Drive folder</h2><p>{driveFolder ? "Selected folder: "+driveFolder.name : "Optionally import PDFs from one folder you choose in your Google Drive."}</p>{driveMessage && <small className="drive-message">{driveMessage}</small>}</div>
+            <div className="drive-card-copy"><h2>Google Drive PDFs</h2><p>{driveSelection.length ? driveSelection.length+" PDF(s) selected previously" : "Choose specific PDF files from your Drive. PaperSpace only receives access to files you select."}</p>{driveMessage && <small className="drive-message">{driveMessage}</small>}</div>
             <div className="drive-card-actions">
-              <button className="button button-secondary" onClick={connectGoogleDrive} disabled={driveBusy}><FolderOpen size={16}/>{driveBusy ? "Connecting…" : driveAuthorized ? "Choose folder" : driveFolder ? "Reconnect Drive" : "Connect Drive"}</button>
-              {(driveAuthorized || driveFolder) && <button className="button button-ghost" onClick={disconnectGoogleDrive} disabled={driveBusy}>Disconnect</button>}
+              <button className="button button-secondary" onClick={connectGoogleDrive} disabled={driveBusy}><FolderOpen size={16}/>{driveBusy ? "Connecting…" : driveAuthorized ? "Choose PDFs" : driveSelection.length ? "Reconnect Drive" : "Connect Drive"}</button>
+              {(driveAuthorized || driveSelection.length>0) && <button className="button button-ghost" onClick={disconnectGoogleDrive} disabled={driveBusy}>Disconnect</button>}
             </div>
           </section>
           <div className="section-header">
