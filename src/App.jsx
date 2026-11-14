@@ -161,18 +161,32 @@ function App() {
   const toastTimer = useRef(null);
   const pendingAnnotationRef = useRef(null);
   const highlightClickTimerRef = useRef(null);
+  const topbarTimerRef = useRef(null);
 
-  // Show the workspace breadcrumb briefly on entering the reader, then
-  // remove it completely. Keep this timer tied only to the route: PDF loading
-  // and annotation updates must not restart the three-second countdown.
+  // The workspace bar appears for three seconds on reader entry. Moving
+  // the pointer to the very top edge reveals it again; it then auto-hides.
+  // PDF loads, note edits and page changes do not restart this behaviour.
   useEffect(() => {
     if (view !== "reader") {
       setTopbarVisible(true);
       return;
     }
+    const scheduleHide = () => {
+      window.clearTimeout(topbarTimerRef.current);
+      topbarTimerRef.current = window.setTimeout(() => setTopbarVisible(false), 3000);
+    };
     setTopbarVisible(true);
-    const timerId = window.setTimeout(() => setTopbarVisible(false), 3000);
-    return () => window.clearTimeout(timerId);
+    scheduleHide();
+    const onPointerMove = event => {
+      if (event.clientY > 12) return;
+      setTopbarVisible(true);
+      scheduleHide();
+    };
+    window.addEventListener("pointermove", onPointerMove, {passive:true});
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.clearTimeout(topbarTimerRef.current);
+    };
   }, [view]);
 
   const active = papers.find(p => p.id === activeId) || null;
@@ -1023,7 +1037,7 @@ function App() {
     buildDocument();
 
     const onScroll=()=>{
-      if (root.scrollTop > 4) setTopbarVisible(false);
+      if (root.scrollTop > 4) { setTopbarVisible(false); window.clearTimeout(topbarTimerRef.current); }
       const sheets=Array.from(root.querySelectorAll(".pdf-sheet"));
       if (!sheets.length) return;
       const line=root.getBoundingClientRect().top+36;
