@@ -1230,8 +1230,10 @@ function App() {
               {sidebarVisible ? <PanelLeftClose size={17}/> : <Menu size={17}/>}
             </button>
             <div className="breadcrumb"><span>WORKSPACE</span><b>/</b><strong>{view === "reader" ? "Reading" : view === "library" ? "Library" : view === "notes" ? "Research notes" : "Concept desk"}</strong></div>
+            {view === "reader" && <div className="reader-topbar-meta"><span className="eyebrow">READING WORKSPACE</span><span className="reader-document-title" title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</span></div>}
           </div>
           <div className="top-actions">
+            {view === "reader" && <><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small reader-open-paper" onClick={() => setRoute("library")}><FolderOpen size={14}/> Open paper</button></>}
             <button className="icon-btn theme-toggle" onClick={() => setDark(v=>!v)}>{dark ? <Sun size={16}/> : <Moon size={16}/>}<span>{dark ? "Light mode" : "Dark mode"}</span></button>
             {view !== "reader" && <button className="button button-primary" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={16}/><span>Add paper</span></button>}
             {view === "reader" && <button className="icon-btn topbar-collapse" title="Hide top bar" aria-label="Hide top bar" onClick={() => setTopbarVisible(false)}><ChevronUp size={17}/></button>}
@@ -1295,10 +1297,6 @@ function App() {
         </div>}
 
         {view === "reader" && <div className="reader-content">
-          <div className="reader-headline">
-            <div className="reader-title-line"><span className="eyebrow">READING WORKSPACE</span><span className="reader-document-title" title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</span></div>
-            <div className="reader-headline-actions"><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small" onClick={() => setRoute("library")}><FolderOpen size={14}/> Open paper</button></div>
-          </div>
           <div className={"reader-layout "+(annotationPopup && readMode ? "annotation-open " : "")+(editingAnnotationNoteId !== null && annotationPopup && readMode ? "annotation-edit-focus" : "")}>
             <section className="pdf-panel">
               <div className="pdf-toolbar">
