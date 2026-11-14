@@ -1253,3 +1253,73 @@
   vertical-align:baseline !important;
   white-space:inherit !important;
 }
+
+
+/* Reader fills the full viewport after the workspace header is hidden.
+   Remove the old fixed 245px subtraction which caused the empty bottom band. */
+.reader-mode,.reader-mode .main-area{
+  height:100dvh !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+.reader-mode .main-area{
+  display:flex !important;
+  flex-direction:column !important;
+}
+.reader-topbar-collapsed .reader-content{
+  height:100dvh !important;
+  min-height:0 !important;
+  flex:1 1 0 !important;
+  padding-top:12px !important;
+  padding-bottom:12px !important;
+}
+.reader-topbar-collapsed .reader-headline{display:none !important}
+.reader-topbar-collapsed .reader-layout{
+  flex:1 1 0 !important;
+  height:100% !important;
+  min-height:0 !important;
+  align-items:stretch !important;
+}
+.reader-topbar-collapsed .pdf-panel,
+.reader-topbar-collapsed .annotation-read-popover,
+.reader-topbar-collapsed .reader-side{
+  height:100% !important;
+  min-height:0 !important;
+}
+.reader-topbar-collapsed .pdf-page-host{
+  height:auto !important;
+  min-height:0 !important;
+  flex:1 1 0 !important;
+}
+
+/* Annotation mode must stretch to the same bottom edge as the PDF panel. */
+.reader-layout.annotation-open{
+  height:100% !important;
+  min-height:0 !important;
+  align-self:stretch !important;
+}
+.reader-layout.annotation-open .annotation-read-popover{
+  height:100% !important;
+  max-height:none !important;
+  min-height:0 !important;
+}
+.reader-layout.annotation-open .pdf-panel{
+  height:100% !important;
+  min-height:0 !important;
+}
+.reader-layout.annotation-open .pdf-page-host{
+  height:auto !important;
+  min-height:0 !important;
+  flex:1 1 0 !important;
+}
+@media(max-width:900px){
+  .reader-topbar-collapsed .reader-content{
+    height:100dvh !important;
+    padding-top:8px !important;
+    padding-bottom:8px !important;
+  }
+  .reader-layout.annotation-open{
+    height:100% !important;
+    min-height:0 !important;
+  }
+}
