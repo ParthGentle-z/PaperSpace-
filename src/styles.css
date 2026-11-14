@@ -1141,3 +1141,11 @@
 .annotation-note-rich-text{margin-top:8px;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
 .annotation-note-rich-text p{margin:0 0 7px}
 .annotation-note-rich-text span[style*="background-color"]{border-radius:3px;padding:0 .08em}
+
+
+/* Note highlighting controls sit below the editor. Selection is retained while a colour is chosen. */
+.annotation-highlight-tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px;padding:10px 11px;border:1px solid var(--line);border-radius:9px;background:var(--surface2)}
+.annotation-highlight-tools>span{margin-right:4px;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.1em}
+.annotation-highlight-tools button{width:24px;height:24px;flex:0 0 24px;padding:0;border:2px solid var(--surface);outline:1px solid var(--line);border-radius:50%;background:var(--note-mark);cursor:pointer}
+.annotation-highlight-tools button:hover{transform:scale(1.08)}
+.annotation-highlight-tools button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
