@@ -60,6 +60,32 @@ function dbDelete(db,id) {
   });
 }
 const dateLabel = value => new Date(value).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
+const escapeAnnotationHtml = value => String(value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+function sanitizeAnnotationHtml(html) {
+  const parsed = new DOMParser().parseFromString(String(html || ""), "text/html");
+  const allowed = new Set(["DIV","P","BR","SPAN","MARK","B","STRONG","I","EM","U"]);
+  const walk = node => {
+    [...node.childNodes].forEach(child => {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        if (!allowed.has(child.tagName)) {
+          child.replaceWith(...child.childNodes);
+          return;
+        }
+        [...child.attributes].forEach(attribute => {
+          if (child.tagName === "SPAN" && attribute.name === "style" && /^background-color:\s*(#[0-9a-f]{3,8}|rgb\([\d\s%,.]+\))\s*;?$/i.test(attribute.value)) return;
+          child.removeAttribute(attribute.name);
+        });
+        walk(child);
+      } else if (child.nodeType !== Node.TEXT_NODE) child.remove();
+    });
+  };
+  walk(parsed.body);
+  return parsed.body.innerHTML;
+}
+function annotationHtmlToText(html) {
+  const parsed = new DOMParser().parseFromString(String(html || ""), "text/html");
+  return (parsed.body.innerText || parsed.body.textContent || "").replace(/\u00a0/g," ").trim();
+}
 const readJson = (key,fallback) => {
   try { const value = JSON.parse(localStorage.getItem(key) || "null"); return value ?? fallback; }
   catch { return fallback; }
@@ -101,6 +127,7 @@ function App() {
   const [annotationPopup,setAnnotationPopup] = useState(null);
   const [editingAnnotationNoteId,setEditingAnnotationNoteId] = useState(null);
   const [annotationDraft,setAnnotationDraft] = useState("");
+  const annotationEditorRef = useRef(null);
   const [annotationSaveBusy,setAnnotationSaveBusy] = useState(false);
   const [annotationQuoteExpanded,setAnnotationQuoteExpanded] = useState(false);
   const [focusedAnnotationId,setFocusedAnnotationId] = useState("");
@@ -283,7 +310,10 @@ function App() {
   },[]);
 
   const saveAnnotationNote = useCallback(async () => {
-    if (!db || !active || !annotationPopup || !annotationDraft.trim()) return;
+    const editorHtml = annotationEditorRef.current?.innerHTML || "";
+    const safeHtml = sanitizeAnnotationHtml(editorHtml);
+    const plainText = annotationEditorRef.current ? annotationHtmlToText(safeHtml) : annotationDraft.trim();
+    if (!db || !active || !annotationPopup || !plainText) return;
     setAnnotationSaveBusy(true);
     try {
       const existingId = editingAnnotationNoteId && editingAnnotationNoteId !== "__new__" ? editingAnnotationNoteId : null;
@@ -292,14 +322,15 @@ function App() {
       let nextNotes;
       if (existingId) {
         nextNotes = currentNotes.map(item => item.id === existingId
-          ? {...item,text:annotationDraft.trim(),updated:Date.now()}
+          ? {...item,text:plainText,html:safeHtml,updated:Date.now()}
           : item);
         savedNote = nextNotes.find(item => item.id === existingId);
       } else {
         savedNote = {
           id:crypto.randomUUID(),
           page:annotationPopup.highlight.page || page,
-          text:annotationDraft.trim(),
+          text:plainText,
+          html:safeHtml,
           created:Date.now(),
           type:"passage",
           anchor:{
@@ -322,6 +353,7 @@ function App() {
       setAnnotationPopup(current => current ? {...current,notes:linkedNotes} : current);
       setEditingAnnotationNoteId(null);
       setAnnotationDraft("");
+      if (annotationEditorRef.current) annotationEditorRef.current.innerHTML = "";
       notify(existingId ? "Annotation updated and saved." : "Passage note saved.");
     } catch (error) {
       notify("Could not save this annotation. Please try again.");
@@ -335,6 +367,14 @@ function App() {
     catch { notify("Clipboard access was unavailable in this browser."); }
     setAnnotationMenuOpen(false);
   },[notify]);
+
+  const cancelAnnotationEdit = useCallback(() => {
+    // Cancel only abandons the unsaved editor draft. Keep the same reader page
+    // and annotation panel open, without changing the saved note.
+    setEditingAnnotationNoteId(null);
+    setAnnotationDraft("");
+    if (annotationEditorRef.current) annotationEditorRef.current.innerHTML = "";
+  },[]);
 
   const closeAnnotationPanel = useCallback(() => {
     if (editingAnnotationNoteId && annotationDraft.trim()) {
@@ -1183,10 +1223,26 @@ function App() {
                         </div>
                       </div>
                       {editingAnnotationNoteId === item.id
-                        ? <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save changes</>}</button></div></div>
-                        : <p>{item.text}</p>}
+                        ? <div className="annotation-editor">
+                            <div className="annotation-format-toolbar" role="toolbar" aria-label="Note text formatting">
+                              <span>HIGHLIGHT</span>
+                              {[["#fff1a8","Yellow"],["#c9f2d5","Green"],["#cfe8ff","Blue"],["#f8d4e3","Pink"]].map(([color,label])=><button type="button" key={color} title={label+" highlight"} aria-label={label+" highlight"} style={{"--note-mark":color}} onMouseDown={event=>event.preventDefault()} onClick={()=>{annotationEditorRef.current?.focus();document.execCommand("hiliteColor",false,color);}}/>)}
+                              <button type="button" className="annotation-format-clear" onMouseDown={event=>event.preventDefault()} onClick={()=>{annotationEditorRef.current?.focus();document.execCommand("removeFormat",false,null);}}>Clear</button>
+                            </div>
+                            <div ref={annotationEditorRef} className="annotation-rich-editor" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" data-placeholder="Write your explanation, question, or connection…" dangerouslySetInnerHTML={{__html:item.html ? sanitizeAnnotationHtml(item.html) : escapeAnnotationHtml(item.text).replace(/\n/g,"<br>")}}/>
+                            <div className="annotation-editor-actions"><button type="button" className="button button-secondary button-small" onClick={cancelAnnotationEdit}>Cancel</button><button type="button" className="button button-primary button-small" disabled={annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save changes</>}</button></div>
+                          </div>
+                        : item.html ? <div className="annotation-note-rich-text" dangerouslySetInnerHTML={{__html:sanitizeAnnotationHtml(item.html)}}/> : <p>{item.text}</p>}
                     </article>) : editingAnnotationNoteId !== "__new__" && <div className="annotation-empty-note"><p>No note is linked to this highlight yet.</p><button onClick={()=>beginAnnotationEdit()}><Pencil size={13}/> Write a note for this passage</button></div>}
-                    {editingAnnotationNoteId === "__new__" && <div className="annotation-editor"><textarea autoFocus value={annotationDraft} onChange={event=>setAnnotationDraft(event.target.value)} placeholder="Write your explanation, question, or connection…"/><div className="annotation-editor-actions"><button className="button button-secondary button-small" onClick={()=>{setEditingAnnotationNoteId(null);setAnnotationDraft("");}}>Cancel</button><button className="button button-primary button-small" disabled={!annotationDraft.trim() || annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save note</>}</button></div></div>}
+                    {editingAnnotationNoteId === "__new__" && <div className="annotation-editor">
+                    <div className="annotation-format-toolbar" role="toolbar" aria-label="Note text formatting">
+                      <span>HIGHLIGHT</span>
+                      {[["#fff1a8","Yellow"],["#c9f2d5","Green"],["#cfe8ff","Blue"],["#f8d4e3","Pink"]].map(([color,label])=><button type="button" key={color} title={label+" highlight"} aria-label={label+" highlight"} style={{"--note-mark":color}} onMouseDown={event=>event.preventDefault()} onClick={()=>{annotationEditorRef.current?.focus();document.execCommand("hiliteColor",false,color);}}/>)}
+                      <button type="button" className="annotation-format-clear" onMouseDown={event=>event.preventDefault()} onClick={()=>{annotationEditorRef.current?.focus();document.execCommand("removeFormat",false,null);}}>Clear</button>
+                    </div>
+                    <div ref={annotationEditorRef} className="annotation-rich-editor" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" data-placeholder="Write your explanation, question, or connection…" dangerouslySetInnerHTML={{__html:escapeAnnotationHtml(annotationDraft).replace(/\n/g,"<br>")}}/>
+                    <div className="annotation-editor-actions"><button type="button" className="button button-secondary button-small" onClick={cancelAnnotationEdit}>Cancel</button><button type="button" className="button button-primary button-small" disabled={annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save note</>}</button></div>
+                  </div>}
                   </div>
                   <div className="annotation-notes-footer">
                     <button className="text-link" onClick={()=>{if(editingAnnotationNoteId && annotationDraft.trim() && !window.confirm("Discard your unsaved annotation changes before opening Research Notes?")) return; setAnnotationPopup(null);setEditingAnnotationNoteId(null);setAnnotationDraft("");setFocusedAnnotationId(annotationPopup.highlight.id);setAnnotationFilter("all");setAnnotationSearch("");setExpandedPaperIds(ids=>active&&!ids.includes(active.id)?[...ids,active.id]:ids);setRoute("notes");}}>Open in Research Notes <ChevronRight size={14}/></button>
