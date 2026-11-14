@@ -1700,3 +1700,61 @@ body:has(.app-shell.reader-mode) #root {
   .reader-topbar-meta .reader-document-title { max-width:32vw; font-size:12px; }
   .reader-open-paper, .reader-page-status { display:none !important; }
 }
+
+
+/* Sidebar quick actions: upload and icon-only appearance toggle share one row. */
+.sidebar-actions-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:16px 14px 10px;
+}
+.sidebar-actions-row .sidebar-add-paper{
+  flex:1 1 auto;
+  width:auto;
+  min-width:0;
+  margin:0;
+}
+.sidebar-theme-toggle{
+  flex:0 0 40px;
+  width:40px;
+  min-width:40px;
+  height:40px;
+  padding:0;
+  border-radius:9px;
+  color:var(--muted);
+}
+.sidebar-theme-toggle:hover{
+  color:var(--accent);
+  border-color:var(--accent);
+  background:var(--wash);
+}
+
+/* Keep reader header actions visually light: icons, not rounded pills. */
+.reader-mode .reader-open-paper,
+.reader-mode .topbar-collapse{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  width:34px !important;
+  min-width:34px !important;
+  height:34px !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:var(--muted) !important;
+  cursor:pointer;
+}
+.reader-mode .reader-open-paper:hover,
+.reader-mode .topbar-collapse:hover{
+  color:var(--accent) !important;
+  background:var(--wash) !important;
+}
+.reader-mode .top-actions{gap:14px !important}
+.reader-mode .reader-page-status{
+  padding:0 2px;
+  border:0;
+  background:transparent;
+}
