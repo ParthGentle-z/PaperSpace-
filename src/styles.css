@@ -1808,3 +1808,17 @@ body:has(.app-shell.reader-mode) #root {
   .account-trigger span{display:none}
   .account-dialog{padding:24px 20px}
 }
+
+
+/* M1.4: explicit Google Drive file-selection controls */
+.drive-card-actions{display:flex;align-items:center;gap:8px;flex:none}
+.drive-card-actions .button-ghost{
+  min-height:38px;padding:0 10px;border:1px solid var(--line);border-radius:9px;
+  background:transparent;color:var(--muted);font-size:11px;cursor:pointer
+}
+.drive-card-actions .button-ghost:hover{border-color:var(--accent);color:var(--accent);background:var(--wash)}
+@media(max-width:700px){
+  .drive-card{align-items:flex-start;flex-wrap:wrap}
+  .drive-card-copy{flex:1 1 calc(100% - 58px)}
+  .drive-card-actions{width:100%;padding-left:54px;flex-wrap:wrap}
+}
