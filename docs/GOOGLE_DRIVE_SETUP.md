@@ -50,9 +50,9 @@ The selected file names/IDs are stored only as a local UI preference. They are n
 
 - Only files explicitly selected in Picker are downloaded.
 - The original Drive files are read, not edited or deleted.
-- PDFs remain local to this browser in this milestone.
-- No background Drive scanning, recursive folder traversal, automatic upload or cross-device retrieval is implemented here.
-- Google OAuth testing-mode restrictions and token lifetimes are controlled by Google and may change.
+- Picker-selected PDFs are imported into the current browser's IndexedDB. Separately, the M1.5 upload workflow stores explicitly selected local PDFs in the user's Drive and records their Drive IDs in Firestore; the restore workflow retrieves those records on another device.
+- No background Drive scanning, recursive folder traversal or automatic upload is implemented.
+- Google OAuth testing-mode restrictions and token lifetimes are controlled by Google and may change. For an External OAuth app in Testing status, Google currently limits the test-user list to 100 and authorizations expire after seven days; plan to reauthorize during testing.
 - Do not use real or sensitive research documents until you have reviewed the Google consent screen and confirmed the account and app configuration.
 
 ## 6. Zero-spending rule
@@ -97,3 +97,55 @@ The Firestore account and Google Drive account are separate identities. Use the 
 - Google Drive storage counts against the user's own Drive quota.
 - Do not link Cloud Billing, add a payment method or upgrade to a paid tier. If a quota or API policy blocks the free/no-billing workflow, stop and show the error.
 - Test with non-sensitive sample PDFs first. Verify upload and restore using the same Google and Firebase accounts before relying on it for research data.
+
+
+## 8. M1.6 configuration review and sample-test plan
+
+### Firebase project checks
+
+Before adding the public web configuration values to GitHub Actions variables, verify in Firebase Console:
+
+- Project plan is **Spark** and no Cloud Billing account is linked.
+- Only the intended Web app is registered.
+- Google and Email/Password are enabled under Authentication.
+- The GitHub Pages hostname and local development hostname are listed as authorized domains.
+- Firestore is created in the intended region and starts in production/locked mode.
+- The exact contents of the repository's `firestore.rules` are reviewed before deployment.
+- Do not enable phone/SMS authentication, Cloud Storage, Cloud Functions, Cloud Run or Firebase Hosting.
+
+Firebase's current Spark plan includes no-cost quotas for Firestore, but Firestore is a product with paid usage on Blaze. If a Spark quota is exceeded, the affected product is shut off for the rest of the billing cycle rather than automatically billing on Spark. Never link billing to restore service.
+
+### Google Cloud project checks
+
+Before adding Google variables:
+
+- Use the same Google Cloud project number as the OAuth client and Picker API key.
+- Enable Google Picker API and Google Drive API only if available without enabling billing.
+- Confirm the OAuth client is a Web application and its JavaScript origins exactly match the app's deployed origin and localhost development origin.
+- Restrict the API key to the Picker API and the required HTTP referrers.
+- Configure the OAuth consent screen as External/Testing for personal testing and add only the intended test account.
+- Request only `drive.file`; do not add broad Drive scopes.
+- Do not create a client secret or service-account key for this browser-only integration.
+- If the console asks for billing, a payment method, a paid upgrade, or a billing-enabled quota increase, stop.
+
+Google currently states standard Drive API usage is available at no additional cost, but quota limits and a future quota-based billing threshold are documented for 2026. Keep usage conservative and never attach a billing account. If the no-billing project cannot perform an operation, stop rather than trying to enable billing.
+
+### Safe sample PDF test sequence
+
+Use two non-sensitive sample PDFs (one small PDF and one larger PDF, for example 6–10 MB). Do not use private research documents for the first test.
+
+1. Sign in to PaperSpace with the test Firebase account.
+2. Connect the intended Google account in Drive.
+3. Upload the small PDF; confirm the file appears in the user's Drive `PaperSpace` folder.
+4. Confirm the matching Firestore paper record contains the Drive file ID and file name under the signed-in UID.
+5. Upload the larger PDF and confirm it completes.
+6. Open a separate browser profile or second device. Sign in to the same Firebase account and authorize the same Google Drive account.
+7. Select **Restore cloud papers** and confirm both PDFs appear and open in the reader.
+8. Create a local note and highlight on one device, then verify the documentation accurately describes that these are still local-only and do not appear on the second device.
+9. Sign out and confirm local papers remain available in the first browser.
+10. Revoke Drive consent or use a different Google account and verify restore fails safely without deleting local data.
+
+### Evidence to retain
+
+For a release decision, record the test date, browser, deployed origin, Firebase project plan (Spark), Drive OAuth test-user status, sample PDF sizes, and pass/fail result for each step. Never paste access tokens, passwords, OAuth secrets or private keys into an issue or chat.
+
