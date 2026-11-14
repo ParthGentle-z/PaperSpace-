@@ -178,7 +178,7 @@ function App() {
     setTopbarVisible(true);
     scheduleHide();
     const onPointerMove = event => {
-      if (event.clientY > 12) return;
+      if (event.clientY > 96) return;
       setTopbarVisible(true);
       scheduleHide();
     };
