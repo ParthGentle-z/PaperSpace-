@@ -1080,3 +1080,49 @@
   min-height:clamp(220px,38vh,460px) !important;
   resize:vertical;
 }
+
+
+/* Focus editing workspace: hide navigation and give the note editor priority. */
+.annotation-focus-mode .sidebar{display:none !important}
+.annotation-focus-mode .main-area{margin-left:0 !important}
+.annotation-focus-mode .reader-content{width:100%;padding-left:clamp(12px,2vw,30px);padding-right:clamp(12px,2vw,30px)}
+.reader-layout.annotation-edit-focus{
+  height:calc(100dvh - 150px) !important;min-height:520px !important;
+  grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr) !important;
+  gap:16px !important;align-items:stretch !important
+}
+.reader-layout.annotation-edit-focus .pdf-panel{
+  grid-column:1;grid-row:1;height:100% !important;min-height:0 !important;
+  display:flex;flex-direction:column
+}
+.reader-layout.annotation-edit-focus .pdf-page-host{
+  flex:1 1 0 !important;height:auto !important;min-height:0 !important;overflow:auto
+}
+.reader-layout.annotation-edit-focus .annotation-read-popover{
+  grid-column:2 !important;grid-row:1 !important;width:100% !important;
+  height:100% !important;min-height:0 !important;max-height:none !important;
+  padding:0 22px 16px !important;border-radius:14px
+}
+.reader-layout.annotation-edit-focus .annotation-read-head{
+  margin-left:-22px !important;margin-right:-22px !important;
+  padding-left:22px !important;padding-right:22px !important
+}
+.reader-layout.annotation-edit-focus .annotation-read-quote{display:none !important}
+.reader-layout.annotation-edit-focus .annotation-notes-area{
+  flex:1 1 0 !important;min-height:0 !important;overflow:hidden !important
+}
+.reader-layout.annotation-edit-focus .annotation-note-list{
+  flex:1 1 0 !important;min-height:0 !important;overflow-y:auto !important;padding-right:8px
+}
+.reader-layout.annotation-edit-focus .annotation-editor{padding:16px !important}
+.reader-layout.annotation-edit-focus .annotation-editor textarea{
+  min-height:clamp(320px,52vh,680px) !important;font-size:15px !important;line-height:1.8 !important
+}
+.reader-layout.annotation-edit-focus .annotation-note-meta{position:sticky !important;top:0 !important;z-index:10 !important}
+.annotation-focus-mode .reader-compact-bar{padding-left:clamp(12px,2vw,30px);padding-right:clamp(12px,2vw,30px)}
+@media(max-width:900px){
+ .reader-layout.annotation-edit-focus{height:auto !important;min-height:0 !important;display:flex !important;flex-direction:column !important;overflow:visible !important}
+ .reader-layout.annotation-edit-focus .pdf-panel{height:48vh !important;min-height:300px !important;flex:none !important}
+ .reader-layout.annotation-edit-focus .annotation-read-popover{height:65vh !important;min-height:460px !important;max-height:none !important}
+ .reader-layout.annotation-edit-focus .annotation-editor textarea{min-height:38vh !important}
+}
