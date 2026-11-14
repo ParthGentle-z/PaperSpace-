@@ -149,6 +149,7 @@ function App() {
   const [toast,setToast] = useState("");
   const [driveBusy,setDriveBusy] = useState(false);
   const [driveMessage,setDriveMessage] = useState("");
+  const [driveAuthorized,setDriveAuthorized] = useState(false);
   const [driveFolder,setDriveFolder] = useState(() => readJson("ps-drive-folder",null));
   const canvasHost = useRef(null);
   const activeHighlightsRef = useRef([]);
@@ -1128,8 +1129,13 @@ function App() {
   },[papers]);
 
   const importDriveFolder = useCallback(async folder => {
-    if (!driveTokenRef.current) throw new Error("Google Drive access token is missing.");
-    const token = driveTokenRef.current;
+    const session = driveTokenRef.current;
+    if (!session?.accessToken || Date.now() >= session.expiresAt - 60000) {
+      driveTokenRef.current = null;
+      setDriveAuthorized(false);
+      throw new Error("Your temporary Google Drive permission has expired. Reconnect Drive and choose the folder again.");
+    }
+    const token = session.accessToken;
     const q = encodeURIComponent("'"+folder.id+"' in parents and mimeType='application/pdf' and trashed=false");
     const response = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id,name,mimeType,modifiedTime,size)&pageSize=100",{
       headers:{Authorization:"Bearer "+token}
@@ -1165,7 +1171,18 @@ function App() {
         scope:"https://www.googleapis.com/auth/drive.file",
         callback:async response => {
           if (response.error) { setDriveBusy(false); setDriveMessage("Google authorisation was not completed."); return; }
-          driveTokenRef.current = response.access_token;
+          if (!response.access_token) {
+            driveTokenRef.current = null;
+            setDriveAuthorized(false);
+            setDriveBusy(false);
+            setDriveMessage("Google did not return an access token. No Drive files were accessed.");
+            return;
+          }
+          driveTokenRef.current = {
+            accessToken: response.access_token,
+            expiresAt: Date.now() + Math.max(0, Number(response.expires_in) || 3600) * 1000
+          };
+          setDriveAuthorized(true);
           const pickerView = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
             .setIncludeFolders(true).setSelectFolderEnabled(true);
           const picker = new window.google.picker.PickerBuilder()
@@ -1191,6 +1208,16 @@ function App() {
       setDriveMessage("Google Picker could not be loaded. Check API activation and authorised website origins.");
     }
   },[importDriveFolder]);
+
+  const disconnectGoogleDrive = useCallback(() => {
+    // Google Identity Services access tokens are short-lived and held only in memory.
+    // Clearing this reference disconnects this PaperSpace browser session.
+    driveTokenRef.current = null;
+    setDriveAuthorized(false);
+    setDriveFolder(null);
+    localStorage.removeItem("ps-drive-folder");
+    setDriveMessage("Drive disconnected from this PaperSpace session. Previously imported local PDF copies are unchanged.");
+  },[]);
 
   const closeSidebarPaper = id => closeOpenPaper(id);
   const activeHighlights = active?.highlights || [];
@@ -1258,7 +1285,10 @@ function App() {
           <section className="drive-card">
             <div className="drive-card-icon"><Cloud size={21}/></div>
             <div className="drive-card-copy"><h2>Google Drive folder</h2><p>{driveFolder ? "Selected folder: "+driveFolder.name : "Optionally import PDFs from one folder you choose in your Google Drive."}</p>{driveMessage && <small className="drive-message">{driveMessage}</small>}</div>
-            <button className="button button-secondary" onClick={connectGoogleDrive} disabled={driveBusy}><FolderOpen size={16}/>{driveBusy ? "Connecting…" : driveFolder ? "Choose folder" : "Connect Drive"}</button>
+            <div className="drive-card-actions">
+              <button className="button button-secondary" onClick={connectGoogleDrive} disabled={driveBusy}><FolderOpen size={16}/>{driveBusy ? "Connecting…" : driveAuthorized ? "Choose folder" : driveFolder ? "Reconnect Drive" : "Connect Drive"}</button>
+              {(driveAuthorized || driveFolder) && <button className="button button-ghost" onClick={disconnectGoogleDrive} disabled={driveBusy}>Disconnect</button>}
+            </div>
           </section>
           <div className="section-header">
             <div><h2>Your collection</h2><p>Search, open or remove papers from this browser.</p></div>
