@@ -58,3 +58,41 @@ The workspace header now includes an account control. Once a Firebase project ha
 In Firebase Console, enable **Google** and **Email/Password** under Authentication → Sign-in method. Add the deployed GitHub Pages hostname and local development hostname under Authentication → Settings → Authorized domains. Do not enable phone authentication.
 
 Until all Firebase web configuration values are supplied, the account dialog explicitly reports that authentication is not configured and the existing local-first reader remains usable. The interface does not create a Firebase project or upload local papers.
+
+
+## Firestore data access and security (M1.3)
+
+The repository now includes:
+
+- `firestore.rules`: default-deny rules with account ownership enforced by matching the authenticated UID to the `users/{userId}` path.
+- `src/services/firestore.js`: small client-side helpers for user profiles, paper metadata, and listing paper notes/annotations.
+- User-owned data paths:
+  - `users/{uid}`
+  - `users/{uid}/papers/{paperId}`
+  - `users/{uid}/papers/{paperId}/notes/{noteId}`
+  - `users/{uid}/papers/{paperId}/annotations/{annotationId}`
+  - `users/{uid}/projects/{projectId}`
+
+Rules validate permitted fields and basic types/size limits. Unmatched paths are denied. Profile documents cannot be deleted through these rules. Paper, note, annotation and project documents can be deleted by their owner.
+
+### Important implementation boundaries
+
+- Firestore is not initialized unless Firebase web configuration exists.
+- These service functions are not yet connected to the reader's IndexedDB records. M1.3 establishes the data/security layer only; cloud sync and migration remain later steps.
+- The service accepts a UID argument for path construction, but the rules—not that argument—enforce ownership. Calls must still be made only for the current authenticated user's UID.
+- Deleting a paper document does not automatically delete its Firestore subcollections. A later deletion workflow must explicitly remove child note and annotation documents before removing the parent.
+- No server/admin SDK, service-account key, Cloud Function or backend is introduced.
+
+### Required manual security verification before enabling real user data
+
+Use two separate test accounts (A and B) in the Firebase Emulator Suite or a dedicated non-production Firebase test project:
+
+1. Unauthenticated read/write to `users/A` is denied.
+2. Account A can create/read/update its own profile and paper metadata.
+3. Account A cannot read, create, update or delete records under `users/B`.
+4. Account A cannot write unknown fields or invalid field types.
+5. Account B cannot access A's notes or annotations.
+6. A user cannot delete the profile document.
+7. A user cannot access any unlisted collection path.
+
+Do not test with real research data until these checks pass. The current repository change does not run the Firestore Emulator or deploy rules to a cloud project.
