@@ -1207,33 +1207,43 @@ function App() {
         setDriveAuthorized(false);
         throw new Error("Google Drive access expired during upload. Completed uploads remain in Drive; local PDFs are safe. Reconnect before retrying remaining files.");
       }
-      const boundary = "paperspace_"+crypto.randomUUID().replace(/-/g,"");
       const metadata = {
         name:file.name,
         mimeType:"application/pdf",
         parents:[folderId],
         description:"Uploaded by PaperSpace"
       };
-      const body = new Blob([
-        "--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n",
-        JSON.stringify(metadata)+"\r\n",
-        "--"+boundary+"\r\nContent-Type: application/pdf\r\n\r\n",
-        file,
-        "\r\n--"+boundary+"--"
-      ],{type:"multipart/related; boundary="+boundary});
-      const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType",{
+      // Resumable upload supports research PDFs larger than the small-file multipart path.
+      const sessionResponse = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType",{
         method:"POST",
-        headers:{Authorization:"Bearer "+token},
-        body
+        headers:{
+          Authorization:"Bearer "+token,
+          "Content-Type":"application/json; charset=UTF-8",
+          "X-Upload-Content-Type":"application/pdf",
+          "X-Upload-Content-Length":String(file.size)
+        },
+        body:JSON.stringify(metadata)
       });
-      if (!response.ok) {
-        if (response.status === 401) {
+      if (!sessionResponse.ok || !sessionResponse.headers.get("Location")) {
+        if (sessionResponse.status === 401) {
+          driveTokenRef.current = null;
+          setDriveAuthorized(false);
+        }
+        throw new Error("Could not start the Drive upload for "+file.name+". Your local PDF remains safe. Check Drive quota and free API availability.");
+      }
+      const uploadResponse = await fetch(sessionResponse.headers.get("Location"),{
+        method:"PUT",
+        headers:{"Content-Type":"application/pdf"},
+        body:file
+      });
+      if (!uploadResponse.ok) {
+        if (uploadResponse.status === 401) {
           driveTokenRef.current = null;
           setDriveAuthorized(false);
         }
         throw new Error("Drive upload failed for "+file.name+". Your local PDF remains safe. Check Drive quota and free API availability.");
       }
-      const uploadedFile = await response.json();
+      const uploadedFile = await uploadResponse.json();
       const local = papers.find(item => !matchedLocalIds.has(item.id) && item.name === file.name && item.blob?.size === file.size && (!item.blob?.lastModified || item.blob.lastModified === file.lastModified));
       const localId = local?.id || crypto.randomUUID();
       if (local) matchedLocalIds.add(local.id);
