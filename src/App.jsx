@@ -10,6 +10,7 @@ import * as pdfjs from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "pdfjs-dist/web/pdf_viewer.css";
 import "./styles.css";
+import AccountControl from "./auth/AccountControl.jsx";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -1236,6 +1237,7 @@ function App() {
             {view === "reader" && <div className="reader-topbar-meta"><span className="eyebrow">READING WORKSPACE</span><span className="reader-document-title" title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</span></div>}
           </div>
           <div className="top-actions">
+            <AccountControl />
             {view === "reader" && <><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="reader-open-paper" title="Open paper library" aria-label="Open paper library" onClick={() => setRoute("library")}><FolderOpen size={17}/></button></>}
             {view !== "reader" && <button className="button button-primary" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={16}/><span>Add paper</span></button>}
             {view === "reader" && <button className="topbar-collapse" title="Hide top bar" aria-label="Hide top bar" onClick={() => setTopbarVisible(false)}><ChevronUp size={18}/></button>}
