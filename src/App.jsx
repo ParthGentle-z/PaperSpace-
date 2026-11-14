@@ -1486,6 +1486,16 @@ function App() {
           </div>
         </header>
         <input id="paper-upload" hidden type="file" accept="application/pdf,.pdf" multiple onChange={e => { addLocalFiles(e.target.files); e.target.value=""; }}/>
+        <input id="cloud-upload" hidden type="file" accept="application/pdf,.pdf" multiple onChange={async e => {
+          const files = e.target.files;
+          e.target.value = "";
+          if (!files?.length) return;
+          setCloudBusy(true); setDriveMessage("");
+          try { await uploadLocalPapersToDrive(files); }
+          catch(error) { setDriveMessage(error.message || "Cloud upload failed. Local PDFs remain unchanged."); }
+          finally { setCloudBusy(false); }
+        }}/>
+
 
         {view === "library" && <div className="content library-content">
           <section className="page-heading">
@@ -1501,12 +1511,21 @@ function App() {
             <div className="drive-card-icon"><Cloud size={21}/></div>
             <div className="drive-card-copy"><h2>Google Drive PDFs</h2><p>{driveSelection.length ? driveSelection.length+" PDF(s) selected previously" : "Choose specific PDF files from your Drive. PaperSpace only receives access to files you select."}</p>{driveMessage && <small className="drive-message">{driveMessage}</small>}</div>
             <div className="drive-card-actions">
-              <button className="button button-secondary" onClick={connectGoogleDrive} disabled={driveBusy}><FolderOpen size={16}/>{driveBusy ? "Connecting…" : driveAuthorized ? "Choose PDFs" : driveSelection.length ? "Reconnect Drive" : "Connect Drive"}</button>
-              {(driveAuthorized || driveSelection.length>0) && <button className="button button-ghost" onClick={disconnectGoogleDrive} disabled={driveBusy}>Disconnect</button>}
+              <button className="button button-secondary" onClick={connectGoogleDrive} disabled={driveBusy || cloudBusy}><FolderOpen size={16}/>{driveBusy ? "Connecting…" : driveAuthorized ? "Choose PDFs" : driveSelection.length ? "Reconnect Drive" : "Connect Drive"}</button>
+              {user && <>
+                <button className="button button-primary" onClick={() => document.getElementById("cloud-upload")?.click()} disabled={cloudBusy || driveBusy}><Cloud size={16}/>{cloudBusy ? "Uploading…" : "Upload local PDFs"}</button>
+                <button className="button button-secondary" onClick={async () => {
+                  setCloudBusy(true); setDriveMessage("");
+                  try { await restoreCloudPapers(); }
+                  catch(error) { setDriveMessage(error.message || "Cloud restore failed."); }
+                  finally { setCloudBusy(false); }
+                }} disabled={cloudBusy || driveBusy}><RefreshCw size={15}/>{cloudBusy ? "Restoring…" : "Restore cloud papers"}</button>
+              </>}
+              {(driveAuthorized || driveSelection.length>0) && <button className="button button-ghost" onClick={disconnectGoogleDrive} disabled={driveBusy || cloudBusy}>Disconnect</button>}
             </div>
           </section>
           <div className="section-header">
-            <div><h2>Your collection</h2><p>Search, open or remove papers from this browser.</p></div>
+            <div><h2>Your collection</h2><p>Search, open or remove papers from this browser. Cloud copies are available after sign-in.</p></div>
             <label className="search-box"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search paper titles"/></label>
           </div>
           <div className="paper-grid">
