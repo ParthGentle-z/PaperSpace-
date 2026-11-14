@@ -8,7 +8,7 @@ This guide is for the Firebase Authentication and Cloud Firestore foundation. **
 - `src/firebase.js` initializes Firebase only when all required public web configuration values are present.
 - Authentication and Firestore instances are exported for later M1 steps.
 - No Firebase project has been created or connected by this code change.
-- No user data is sent to Firebase until later authentication and data integration steps are implemented.
+- The account UI and Firestore paper-metadata service are integrated in the M1 branch. When a user signs in and explicitly uploads a PDF to Drive, its metadata is written to that user's Firestore path. No Firebase project is configured by the repository change itself.
 
 ## Project setup (manual, separate approval)
 
@@ -78,7 +78,7 @@ Rules validate permitted fields and basic types/size limits. Unmatched paths are
 ### Important implementation boundaries
 
 - Firestore is not initialized unless Firebase web configuration exists.
-- These service functions are not yet connected to the reader's IndexedDB records. M1.3 establishes the data/security layer only; cloud sync and migration remain later steps.
+- M1.5 connects explicit Drive PDF uploads/restores to Firestore paper metadata. The PDF binary remains in the user's Google Drive; notes, highlights and reading position remain in local IndexedDB. Full annotation sync and migration are later work.
 - The service accepts a UID argument for path construction, but the rules—not that argument—enforce ownership. Calls must still be made only for the current authenticated user's UID.
 - Deleting a paper document does not automatically delete its Firestore subcollections. A later deletion workflow must explicitly remove child note and annotation documents before removing the parent.
 - No server/admin SDK, service-account key, Cloud Function or backend is introduced.
@@ -96,3 +96,46 @@ Use two separate test accounts (A and B) in the Firebase Emulator Suite or a ded
 7. A user cannot access any unlisted collection path.
 
 Do not test with real research data until these checks pass. The current repository change does not run the Firestore Emulator or deploy rules to a cloud project.
+
+
+## 8. M1.6 configuration review and test gate
+
+The repository does not reveal whether a Firebase project exists in the user's Google account or whether it is on Spark. Verify these settings directly in Firebase Console before entering any variables:
+
+- Confirm the project is on Spark and no Cloud Billing account is linked.
+- Enable only Google and Email/Password authentication providers.
+- Add the exact GitHub Pages hostname and local development hostname to authorized domains.
+- Create one Firestore database only, in production/locked mode.
+- Review and deploy the repository's `firestore.rules` only after testing them with the Firebase Emulator or a separate test project.
+- Do not enable phone/SMS, Cloud Storage, Cloud Functions, Cloud Run, Firebase Hosting or paid features.
+
+### Important free-quota behavior
+
+Cloud Firestore's Spark free quota is currently 1 GiB stored data, 50,000 document reads/day, 20,000 writes/day, 20,000 deletes/day and 10 GiB/month egress. If a Spark quota is exceeded, the affected product is shut off for the remainder of the calendar month; Spark does not automatically bill for overage. Do not link billing to restore service.
+
+### Authentication test cases
+
+Use a non-sensitive test account:
+
+1. Register with email/password.
+2. Sign out and sign in again.
+3. Request a password reset.
+4. Sign in with Google.
+5. Reload the page and verify the session persists.
+6. Sign out and verify the local-first library remains available.
+7. Confirm unauthorized-domain and popup-cancel errors are understandable.
+
+### Firestore security test cases
+
+Use Firebase Emulator Suite or a separate test project with two accounts A and B:
+
+1. Unauthenticated reads and writes to `users/A` are denied.
+2. A can create/read/update its own profile and paper metadata.
+3. A cannot read/write/delete B's documents.
+4. Invalid fields, types and unknown paths are rejected.
+5. A cannot delete the profile document.
+6. A can read/write only its own notes and annotations.
+7. Confirm deleting a paper does not silently imply that its subcollections were deleted.
+
+Do not use production user data for security-rule tests.
+
