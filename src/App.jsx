@@ -162,14 +162,18 @@ function App() {
   const pendingAnnotationRef = useRef(null);
   const highlightClickTimerRef = useRef(null);
 
-  // In the reader, automatically collapse the workspace breadcrumb after the
-  // page has opened. Scrolling the PDF also collapses it immediately.
+  // Show the workspace breadcrumb briefly on entering the reader, then
+  // remove it completely. Keep this timer tied only to the route: PDF loading
+  // and annotation updates must not restart the three-second countdown.
   useEffect(() => {
-    if (view !== "reader") return;
+    if (view !== "reader") {
+      setTopbarVisible(true);
+      return;
+    }
     setTopbarVisible(true);
-    const timer = window.setTimeout(() => setTopbarVisible(false),3000);
-    return () => window.clearTimeout(timer);
-  },[view,activeId,pdf]);
+    const timerId = window.setTimeout(() => setTopbarVisible(false), 3000);
+    return () => window.clearTimeout(timerId);
+  }, [view]);
 
   const active = papers.find(p => p.id === activeId) || null;
   activeHighlightsRef.current = active?.highlights || [];
@@ -1201,11 +1205,7 @@ function App() {
             {view !== "reader" && <button className="button button-primary" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={16}/><span>Add paper</span></button>}
             {view === "reader" && <button className="icon-btn topbar-collapse" title="Hide top bar" aria-label="Hide top bar" onClick={() => setTopbarVisible(false)}><ChevronUp size={17}/></button>}
           </div>
-        </header> : view === "reader" ? <div className="reader-compact-bar">
-          <button className="icon-btn compact-sidebar-toggle" title="Show navigation" aria-label="Show navigation" onClick={() => {setSidebarVisible(true);setTopbarVisible(true);setMobileSidebar(window.matchMedia("(max-width: 820px)").matches);}}><PanelLeftOpen size={16}/></button>
-          <div className="reader-compact-title"><span>READING WORKSPACE</span><strong title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</strong></div>
-          <button className="icon-btn compact-expand" title="Show full header" aria-label="Show full header" onClick={() => setTopbarVisible(true)}><ChevronDown size={17}/></button>
-        </div> : null}
+        </header> : null}
         <input id="paper-upload" hidden type="file" accept="application/pdf,.pdf" multiple onChange={e => { addLocalFiles(e.target.files); e.target.value=""; }}/>
 
         {view === "library" && <div className="content library-content">
