@@ -129,6 +129,7 @@ function App() {
   const [annotationDraft,setAnnotationDraft] = useState("");
   const annotationEditorRef = useRef(null);
   const annotationTextRangeRef = useRef(null);
+  const annotationOriginalHtmlRef = useRef(null);
   const [annotationSaveBusy,setAnnotationSaveBusy] = useState(false);
   const [annotationQuoteExpanded,setAnnotationQuoteExpanded] = useState(false);
   const [focusedAnnotationId,setFocusedAnnotationId] = useState("");
@@ -306,6 +307,11 @@ function App() {
   },[db,active,notify]);
 
   const beginAnnotationEdit = useCallback((item=null) => {
+    // Keep an untouched copy so Cancel can always restore the exact saved note.
+    annotationOriginalHtmlRef.current = item?.html
+      ? sanitizeAnnotationHtml(item.html)
+      : escapeAnnotationHtml(item?.text || "").replace(/\n/g,"<br>");
+    annotationTextRangeRef.current = null;
     setEditingAnnotationNoteId(item?.id || "__new__");
     setAnnotationDraft(item?.text || "");
   },[]);
@@ -334,6 +340,8 @@ function App() {
     const range = currentSelection.getRangeAt(0);
     const mark = document.createElement("span");
     mark.style.backgroundColor = color;
+    mark.style.fontSize = "inherit";
+    mark.style.lineHeight = "inherit";
     mark.appendChild(range.extractContents());
     range.insertNode(mark);
     const nextRange = document.createRange();
@@ -403,21 +411,32 @@ function App() {
   },[notify]);
 
   const cancelAnnotationEdit = useCallback(() => {
-    // Keep the current paper, PDF page, annotation and saved note unchanged.
-    // Only leave edit mode and discard the unsaved DOM draft.
+    // Discard the editor DOM only. The persisted note object is never touched.
+    // Capture the actual scrolling regions so exiting edit mode does not jump
+    // to another PDF page or reset the annotation list.
     const pageHost = document.querySelector(".pdf-page-host");
-    const readerScrollTop = pageHost?.scrollTop || 0;
+    const noteList = document.querySelector(".annotation-note-list");
     const annotationPanel = document.querySelector(".annotation-read-popover");
-    const annotationScrollTop = annotationPanel?.scrollTop || 0;
+    const positions = {
+      page: pageHost?.scrollTop ?? 0,
+      notes: noteList?.scrollTop ?? 0,
+      panel: annotationPanel?.scrollTop ?? 0
+    };
+    const original = annotationOriginalHtmlRef.current;
+    if (annotationEditorRef.current && original !== null) {
+      annotationEditorRef.current.innerHTML = original;
+    }
     setEditingAnnotationNoteId(null);
     setAnnotationDraft("");
     annotationTextRangeRef.current = null;
-    if (annotationEditorRef.current) annotationEditorRef.current.innerHTML = "";
+    annotationOriginalHtmlRef.current = null;
     window.requestAnimationFrame(() => {
       const nextPageHost = document.querySelector(".pdf-page-host");
-      if (nextPageHost) nextPageHost.scrollTop = readerScrollTop;
-      const nextAnnotationPanel = document.querySelector(".annotation-read-popover");
-      if (nextAnnotationPanel) nextAnnotationPanel.scrollTop = annotationScrollTop;
+      const nextNoteList = document.querySelector(".annotation-note-list");
+      const nextPanel = document.querySelector(".annotation-read-popover");
+      if (nextPageHost) nextPageHost.scrollTop = positions.page;
+      if (nextNoteList) nextNoteList.scrollTop = positions.notes;
+      if (nextPanel) nextPanel.scrollTop = positions.panel;
     });
   },[]);
 
@@ -1262,10 +1281,10 @@ function App() {
                     {annotationPopup.notes.length ? annotationPopup.notes.map(item=><article className="annotation-read-note" key={item.id}>
                       <div className="annotation-note-meta">
                         <span>NOTE · {dateLabel(item.created)}</span>
-                        <div className="annotation-note-actions">
+                        {editingAnnotationNoteId !== item.id && <div className="annotation-note-actions">
                           <button className="annotation-edit-button" onClick={()=>copyAnnotationText(item.text)}><Copy size={12}/> Copy</button>
                           <button className="annotation-edit-button" onClick={()=>beginAnnotationEdit(item)}><Pencil size={12}/> Edit</button>
-                        </div>
+                        </div>}
                       </div>
                       {editingAnnotationNoteId === item.id
                         ? <div className="annotation-editor">
