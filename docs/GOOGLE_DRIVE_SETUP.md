@@ -1,6 +1,6 @@
 # Google Drive file access setup
 
-PaperSpace can let you explicitly select PDF files from your Google Drive using Google Picker. The browser downloads selected PDFs into this browser's IndexedDB. This milestone does not upload local files to Drive or synchronize files across devices.
+PaperSpace supports two explicit Drive workflows: selecting existing PDFs in Google Picker for local import, and uploading user-selected local PDFs into a PaperSpace folder in the user's own Drive. Uploaded file IDs and basic metadata are saved under the signed-in user's Firestore account so the same account can restore them on another device.
 
 ## 1. Google Cloud configuration (manual; separate approval)
 
@@ -58,3 +58,42 @@ The selected file names/IDs are stored only as a local UI preference. They are n
 ## 6. Zero-spending rule
 
 PaperSpace must not add a payment method, link Cloud Billing or upgrade to a paid Google Cloud plan for this integration. If a quota or API policy blocks the free/no-billing path, stop and show an error rather than retrying through a paid service.
+
+
+## 7. M1.5 — upload and restore cloud PDFs
+
+### Upload from this browser
+
+1. Sign in to PaperSpace using the account that owns the Firestore record.
+2. In the library, choose **Upload local PDFs** and select the files.
+3. Google OAuth requests the narrow `drive.file` scope. The app creates a `PaperSpace` folder in the user's Drive if one is not already recorded in this browser.
+4. The selected PDF files are uploaded into that folder.
+5. PaperSpace saves the Drive file ID, file name and basic paper metadata under `users/{uid}/papers/{paperId}` in Firestore.
+6. The original local IndexedDB copy is preserved. No local record is removed after upload.
+
+### Restore on another device
+
+1. Open PaperSpace on the other device and sign in to the same Firebase account.
+2. Choose **Restore cloud papers**.
+3. Re-authorize Google Drive using the same Google account that owns the uploaded files.
+4. PaperSpace reads the user's Firestore metadata and downloads the referenced PDFs from Drive into that browser's IndexedDB.
+
+The Firestore account and Google Drive account are separate identities. Use the same intended accounts for upload and restore. A Firebase sign-in alone does not grant Drive access.
+
+### Storage and sync boundaries
+
+- PDF binaries are stored in the user's Google Drive, not Firestore.
+- Firestore stores the user's paper ID, title, Drive file ID/name and timestamps.
+- This milestone does not synchronize notes, highlights, reading position, or annotations across devices.
+- Existing local PDFs and annotations are never automatically deleted or overwritten by a failed upload.
+- If the user already has a local PDF with the same paper ID, restore keeps its existing blob and annotations and refreshes the Drive reference.
+- A cloud restore adds the PDF to the local library when no local copy exists.
+- The Drive folder ID is only a local convenience cache; Firestore is the cross-device index of uploaded papers.
+
+### Failure and quota behavior
+
+- Upload requires an explicit file-picker action. No background or automatic uploads occur.
+- If Drive upload or Firestore metadata saving fails, PaperSpace reports the error; local copies are retained. A Drive upload that succeeds before a later Firestore failure may leave an unindexed file in the user's Drive, which the user can manage manually.
+- Google Drive storage counts against the user's own Drive quota.
+- Do not link Cloud Billing, add a payment method or upgrade to a paid tier. If a quota or API policy blocks the free/no-billing workflow, stop and show the error.
+- Test with non-sensitive sample PDFs first. Verify upload and restore using the same Google and Firebase accounts before relying on it for research data.
