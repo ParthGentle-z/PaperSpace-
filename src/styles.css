@@ -1474,3 +1474,166 @@ html:has(.reader-mode), body:has(.reader-mode) {
     grid-template-rows: minmax(0, 1fr) minmax(175px, 30%) !important;
   }
 }
+
+/* FINAL READER VIEWPORT FIX
+   Pin the reading app to the actual browser viewport. The sidebar, PDF and
+   annotation column now share one height boundary; only their content scrolls. */
+html:has(.app-shell.reader-mode),
+body:has(.app-shell.reader-mode),
+body:has(.app-shell.reader-mode) #root {
+  width:100%;
+  height:100%;
+  min-height:0;
+  overflow:hidden !important;
+}
+.app-shell.reader-mode {
+  position:fixed !important;
+  inset:0 !important;
+  display:block !important;
+  width:100vw !important;
+  height:100vh !important;
+  height:100dvh !important;
+  min-height:0 !important;
+  max-height:100dvh !important;
+  overflow:hidden !important;
+}
+.app-shell.reader-mode .sidebar {
+  position:absolute !important;
+  inset:0 auto 0 0 !important;
+  height:100% !important;
+  max-height:100% !important;
+}
+.app-shell.reader-mode .main-area {
+  position:absolute !important;
+  inset:0 0 0 252px !important;
+  width:auto !important;
+  height:100% !important;
+  min-height:0 !important;
+  max-height:100% !important;
+  margin:0 !important;
+  overflow:hidden !important;
+}
+.app-shell.reader-mode.sidebar-hidden .main-area {
+  left:0 !important;
+}
+.app-shell.reader-mode .topbar {
+  position:absolute !important;
+  inset:0 0 auto 0 !important;
+  width:100% !important;
+  height:76px !important;
+  min-height:76px !important;
+  z-index:60 !important;
+}
+.app-shell.reader-mode .reader-content {
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  max-width:none !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  margin:0 !important;
+  padding:88px clamp(12px,1.8vw,28px) 12px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:10px !important;
+  overflow:hidden !important;
+  transition:padding-top .28s ease !important;
+}
+.app-shell.reader-mode.reader-topbar-collapsed .reader-content,
+.app-shell.reader-mode.annotation-focus-mode .reader-content {
+  padding-top:12px !important;
+  padding-bottom:12px !important;
+}
+.app-shell.reader-mode .reader-headline {
+  flex:0 0 auto !important;
+  min-height:38px !important;
+}
+.app-shell.reader-mode.reader-topbar-collapsed .reader-headline,
+.app-shell.reader-mode.annotation-focus-mode .reader-headline {
+  display:none !important;
+}
+.app-shell.reader-mode .reader-layout {
+  flex:1 1 0 !important;
+  width:100% !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  overflow:hidden !important;
+  align-items:stretch !important;
+}
+.app-shell.reader-mode .pdf-panel,
+.app-shell.reader-mode .reader-side,
+.app-shell.reader-mode .annotation-read-popover {
+  height:100% !important;
+  min-height:0 !important;
+  max-height:100% !important;
+}
+.app-shell.reader-mode .pdf-panel {
+  display:flex !important;
+  flex-direction:column !important;
+  overflow:hidden !important;
+}
+.app-shell.reader-mode .pdf-page-host {
+  flex:1 1 0 !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  overflow:auto !important;
+  overscroll-behavior:contain !important;
+}
+.app-shell.reader-mode .reader-side {
+  display:flex !important;
+  flex-direction:column !important;
+  overflow:hidden !important;
+}
+.app-shell.reader-mode .reader-side-scroll {
+  flex:1 1 0 !important;
+  min-height:0 !important;
+  overflow-y:auto !important;
+  overscroll-behavior:contain !important;
+}
+.app-shell.reader-mode .annotation-read-popover {
+  display:flex !important;
+  flex-direction:column !important;
+  overflow:hidden !important;
+}
+.app-shell.reader-mode .annotation-notes-area,
+.app-shell.reader-mode .annotation-note-list {
+  min-height:0 !important;
+}
+.app-shell.reader-mode .annotation-note-list {
+  flex:1 1 0 !important;
+  overflow-y:auto !important;
+  overscroll-behavior:contain !important;
+}
+@media (max-width:820px) {
+  .app-shell.reader-mode .main-area {
+    inset:0 !important;
+    width:100% !important;
+  }
+  .app-shell.reader-mode .topbar {
+    height:58px !important;
+    min-height:58px !important;
+  }
+  .app-shell.reader-mode .reader-content {
+    padding:68px 10px 10px !important;
+    gap:7px !important;
+  }
+  .app-shell.reader-mode.reader-topbar-collapsed .reader-content,
+  .app-shell.reader-mode.annotation-focus-mode .reader-content {
+    padding:9px 10px !important;
+  }
+  .app-shell.reader-mode .reader-layout {
+    grid-template-columns:minmax(0,1fr) !important;
+    grid-template-rows:minmax(0,1fr) minmax(175px,32%) !important;
+  }
+  .app-shell.reader-mode .reader-side {
+    min-height:0 !important;
+  }
+}
+@media (max-width:560px) {
+  .app-shell.reader-mode .reader-layout {
+    grid-template-rows:minmax(0,1fr) minmax(170px,34%) !important;
+  }
+}
