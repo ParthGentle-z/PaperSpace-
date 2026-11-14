@@ -162,7 +162,6 @@ function App() {
   const [driveAuthorized,setDriveAuthorized] = useState(false);
   const [driveSelection,setDriveSelection] = useState(() => readJson("ps-drive-selection",[]));
   const [cloudBusy,setCloudBusy] = useState(false);
-  const [cloudUploadFiles,setCloudUploadFiles] = useState([]);
   const canvasHost = useRef(null);
   const activeHighlightsRef = useRef([]);
   // Snapshot the drag selection before the browser handles the right-click.
