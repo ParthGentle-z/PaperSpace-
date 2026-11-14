@@ -1176,6 +1176,10 @@ function App() {
   },[db,refresh,notify]);
 
   const connectGoogleDrive = useCallback(async () => {
+    if (!db) {
+      setDriveMessage("Local paper storage is still starting. Wait a moment and try again.");
+      return;
+    }
     if (!DRIVE.apiKey || !DRIVE.clientId || !DRIVE.appId) {
       setDriveMessage("Google Drive setup is incomplete. Add the API key, OAuth client ID and Cloud project number in GitHub Actions variables first.");
       return;
@@ -1236,7 +1240,7 @@ function App() {
       setDriveBusy(false);
       setDriveMessage("Google Picker could not be loaded. Check API activation and authorised website origins.");
     }
-  },[importDriveFiles]);
+  },[db,importDriveFiles]);
 
   const disconnectGoogleDrive = useCallback(() => {
     const token = driveTokenRef.current?.accessToken;
