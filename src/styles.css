@@ -1140,7 +1140,7 @@
 .annotation-rich-editor mark,.annotation-note-rich-text mark{padding:0 .08em;border-radius:3px;color:inherit}
 .annotation-note-rich-text{margin-top:8px;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
 .annotation-note-rich-text p{margin:0 0 7px}
-.annotation-note-rich-text span[style*="background-color"]{border-radius:3px;padding:0 .08em}
+.annotation-note-rich-text span[style*="background-color"]{border-radius:0;padding:0}
 
 
 /* Note highlighting controls sit below the editor. Selection is retained while a colour is chosen. */
@@ -1208,4 +1208,25 @@
   line-height:inherit !important;
   color:inherit !important;
   vertical-align:baseline;
+}
+
+
+/* Inline note highlights must be purely visual: no padding, font scaling,
+   line-height changes, or inline-block layout that can alter text wrapping. */
+.annotation-rich-editor [data-note-highlight],
+.annotation-rich-editor span[style*="background-color"],
+.annotation-note-rich-text span[style*="background-color"]{
+  display:inline !important;
+  box-sizing:content-box !important;
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+  font-family:inherit !important;
+  font-size:inherit !important;
+  font-weight:inherit !important;
+  font-style:inherit !important;
+  line-height:inherit !important;
+  letter-spacing:inherit !important;
+  vertical-align:baseline !important;
+  color:inherit !important;
 }
