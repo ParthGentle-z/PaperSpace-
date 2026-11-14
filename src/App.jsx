@@ -1005,7 +1005,7 @@ function App() {
   const activeNotes = active?.notes || [];
 
   return (
-    <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(readMode && view === "reader" ? "read-mode-active " : "")+(sidebarVisible ? "" : "sidebar-hidden")+(topbarVisible ? "" : " reader-topbar-collapsed")}>
+    <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(readMode && view === "reader" ? "read-mode-active " : "")+(sidebarVisible ? "" : "sidebar-hidden")+(topbarVisible ? "" : " reader-topbar-collapsed")+(editingAnnotationNoteId !== null && annotationPopup && readMode ? " annotation-focus-mode" : "")}>
       {sidebarVisible && <aside className={"sidebar "+(mobileSidebar ? "mobile-open" : "")}>
         <div className="brand"><span className="brand-mark">P</span><span className="brand-name">PaperSpace</span><span className="brand-beta">RESEARCH DESK</span></div>
         <button className="sidebar-add-paper" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={15}/> Add paper</button>
@@ -1112,7 +1112,7 @@ function App() {
             <div className="reader-title-line"><span className="eyebrow">READING WORKSPACE</span><span className="reader-document-title" title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</span></div>
             <div className="reader-headline-actions"><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small" onClick={() => setRoute("library")}><FolderOpen size={14}/> Open paper</button></div>
           </div>
-          <div className={"reader-layout "+(annotationPopup && readMode ? "annotation-open" : "")}>
+          <div className={"reader-layout "+(annotationPopup && readMode ? "annotation-open " : "")+(editingAnnotationNoteId !== null && annotationPopup && readMode ? "annotation-edit-focus" : "")}>
             <section className="pdf-panel">
               <div className="pdf-toolbar">
                 <div className="toolbar-page">
