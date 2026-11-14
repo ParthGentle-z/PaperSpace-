@@ -1199,7 +1199,10 @@ function App() {
     <div className={"app-shell "+(view === "reader" ? "reader-mode " : "")+(readMode && view === "reader" ? "read-mode-active " : "")+(sidebarVisible ? "" : "sidebar-hidden")+(topbarVisible ? "" : " reader-topbar-collapsed")+(editingAnnotationNoteId !== null && annotationPopup && readMode ? " annotation-focus-mode" : "")}>
       {sidebarVisible && <aside className={"sidebar "+(mobileSidebar ? "mobile-open" : "")}>
         <div className="brand"><span className="brand-mark">P</span><span className="brand-name">PaperSpace</span><span className="brand-beta">RESEARCH DESK</span></div>
-        <button className="sidebar-add-paper" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={15}/> Add paper</button>
+        <div className="sidebar-actions-row">
+          <button className="sidebar-add-paper" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={15}/> Add paper</button>
+          <button className="icon-btn sidebar-theme-toggle" onClick={() => setDark(v=>!v)} title={dark ? "Switch to light mode" : "Switch to dark mode"} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}>{dark ? <Sun size={17}/> : <Moon size={17}/>}</button>
+        </div>
         <nav className="nav-list">
           <button className={"nav-item "+(view === "library" ? "active" : "")} onClick={() => setRoute("library")}><Library size={18}/><span>Library</span></button>
           <button className={"nav-item "+(view === "notes" ? "active" : "")} onClick={() => setRoute("notes")}><NotebookPen size={18}/><span>Research notes</span></button>
@@ -1233,10 +1236,9 @@ function App() {
             {view === "reader" && <div className="reader-topbar-meta"><span className="eyebrow">READING WORKSPACE</span><span className="reader-document-title" title={active?.name || "No paper selected"}>{active?.name || "Choose an open paper"}</span></div>}
           </div>
           <div className="top-actions">
-            {view === "reader" && <><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="button button-secondary button-small reader-open-paper" onClick={() => setRoute("library")}><FolderOpen size={14}/> Open paper</button></>}
-            <button className="icon-btn theme-toggle" onClick={() => setDark(v=>!v)}>{dark ? <Sun size={16}/> : <Moon size={16}/>}<span>{dark ? "Light mode" : "Dark mode"}</span></button>
+            {view === "reader" && <><span className="reader-page-status">{pdf ? "Page "+page+" of "+pdf.numPages : "Select an open paper to begin"}</span><button className="reader-open-paper" title="Open paper library" aria-label="Open paper library" onClick={() => setRoute("library")}><FolderOpen size={17}/></button></>}
             {view !== "reader" && <button className="button button-primary" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={16}/><span>Add paper</span></button>}
-            {view === "reader" && <button className="icon-btn topbar-collapse" title="Hide top bar" aria-label="Hide top bar" onClick={() => setTopbarVisible(false)}><ChevronUp size={17}/></button>}
+            {view === "reader" && <button className="topbar-collapse" title="Hide top bar" aria-label="Hide top bar" onClick={() => setTopbarVisible(false)}><ChevronUp size={18}/></button>}
           </div>
         </header>
         <input id="paper-upload" hidden type="file" accept="application/pdf,.pdf" multiple onChange={e => { addLocalFiles(e.target.files); e.target.value=""; }}/>
