@@ -11,6 +11,8 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "pdfjs-dist/web/pdf_viewer.css";
 import "./styles.css";
 import AccountControl from "./auth/AccountControl.jsx";
+import { useAuth } from "./auth/AuthContext.jsx";
+import { listPaperRecords, savePaperRecord } from "./services/firestore.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -43,6 +45,13 @@ function dbAll(db) {
   return new Promise((resolve,reject) => {
     const request = db.transaction(STORE).objectStore(STORE).getAll();
     request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+function dbGet(db,id) {
+  return new Promise((resolve,reject) => {
+    const request = db.transaction(STORE).objectStore(STORE).get(id);
+    request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
   });
 }
@@ -104,6 +113,7 @@ function loadScript(src) {
 }
 
 function App() {
+  const { user } = useAuth();
   const [view,setView] = useState(() => {
     const requested = new URLSearchParams(window.location.search).get("p");
     if (requested) window.history.replaceState({}, "", requested);
@@ -151,6 +161,8 @@ function App() {
   const [driveMessage,setDriveMessage] = useState("");
   const [driveAuthorized,setDriveAuthorized] = useState(false);
   const [driveSelection,setDriveSelection] = useState(() => readJson("ps-drive-selection",[]));
+  const [cloudBusy,setCloudBusy] = useState(false);
+  const [cloudUploadFiles,setCloudUploadFiles] = useState([]);
   const canvasHost = useRef(null);
   const activeHighlightsRef = useRef([]);
   // Snapshot the drag selection before the browser handles the right-click.
@@ -1127,6 +1139,174 @@ function App() {
     link.href = URL.createObjectURL(new Blob([payload],{type:"application/json"}));
     link.download = "paperspace-research-backup.json"; link.click(); URL.revokeObjectURL(link.href);
   },[papers]);
+
+  const getDriveAccessToken = useCallback(async () => {
+    if (!DRIVE.clientId) throw new Error("Google Drive OAuth client ID is not configured.");
+    await loadScript("https://accounts.google.com/gsi/client");
+    return new Promise((resolve,reject) => {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id:DRIVE.clientId,
+        scope:"https://www.googleapis.com/auth/drive.file",
+        callback:response => {
+          if (response.error || !response.access_token) {
+            reject(new Error("Google Drive permission was not granted."));
+            return;
+          }
+          const session = {
+            accessToken:response.access_token,
+            expiresAt:Date.now()+Math.max(0,Number(response.expires_in)||3600)*1000
+          };
+          driveTokenRef.current = session;
+          setDriveAuthorized(true);
+          resolve(session);
+        },
+        error_callback:() => reject(new Error("Google Drive authorization was cancelled or blocked."))
+      });
+      client.requestAccessToken({prompt:"consent"});
+    });
+  },[]);
+
+  const getOrCreateDriveFolder = useCallback(async token => {
+    const key = "ps-drive-folder-id:"+user.uid;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const check = await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(saved)+"?fields=id,mimeType",{
+        headers:{Authorization:"Bearer "+token}
+      });
+      if (check.ok) {
+        const item = await check.json();
+        if (item.mimeType === "application/vnd.google-apps.folder") return saved;
+      }
+      localStorage.removeItem(key);
+    }
+    const response = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name",{
+      method:"POST",
+      headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+      body:JSON.stringify({name:"PaperSpace",mimeType:"application/vnd.google-apps.folder"})
+    });
+    if (!response.ok) throw new Error("Could not create the PaperSpace folder in Drive. Check free API access and permissions.");
+    const folder = await response.json();
+    localStorage.setItem(key,folder.id);
+    return folder.id;
+  },[user]);
+
+  const uploadLocalPapersToDrive = useCallback(async files => {
+    if (!user) throw new Error("Sign in to PaperSpace before uploading PDFs to your private Drive.");
+    if (!db) throw new Error("Local paper storage is not ready yet.");
+    const selected = Array.from(files || []).filter(file =>
+      file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+    );
+    if (!selected.length) throw new Error("Choose at least one PDF file.");
+    const session = await getDriveAccessToken();
+    const token = session.accessToken;
+    const folderId = await getOrCreateDriveFolder(token);
+    let uploaded = 0;
+    for (const file of selected) {
+      const boundary = "paperspace_"+crypto.randomUUID().replace(/-/g,"");
+      const metadata = {
+        name:file.name,
+        mimeType:"application/pdf",
+        parents:[folderId],
+        description:"Uploaded by PaperSpace"
+      };
+      const body = new Blob([
+        "--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n",
+        JSON.stringify(metadata)+"\r\n",
+        "--"+boundary+"\r\nContent-Type: application/pdf\r\n\r\n",
+        file,
+        "\r\n--"+boundary+"--"
+      ],{type:"multipart/related; boundary="+boundary});
+      const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType",{
+        method:"POST",
+        headers:{Authorization:"Bearer "+token},
+        body
+      });
+      if (!response.ok) {
+        if (response.status === 401) {
+          driveTokenRef.current = null;
+          setDriveAuthorized(false);
+        }
+        throw new Error("Drive upload failed for "+file.name+". Your local PDF remains safe. Check Drive quota and free API availability.");
+      }
+      const uploadedFile = await response.json();
+      const local = papers.find(item => item.name === file.name && item.blob?.size === file.size);
+      const localId = local?.id || crypto.randomUUID();
+      const existing = local ? local : {
+        id:localId,name:file.name,blob:file,added:Date.now(),notes:[],highlights:[],provider:"local"
+      };
+      const localRecord = {
+        ...existing,
+        driveFileId:uploadedFile.id,
+        driveFileName:uploadedFile.name,
+        provider:"google-drive-backed"
+      };
+      await dbPut(db,localRecord);
+      await savePaperRecord(user.uid,{
+        id:localId,
+        title:file.name,
+        authors:"",
+        publication:"",
+        driveFileId:uploadedFile.id,
+        driveFileName:uploadedFile.name
+      });
+      uploaded++;
+    }
+    await refresh();
+    setDriveMessage(uploaded+" PDF(s) uploaded to your Google Drive PaperSpace folder and linked to your account. Local copies were preserved.");
+    notify("PDF cloud upload complete.");
+  },[user,db,getDriveAccessToken,getOrCreateDriveFolder,papers,refresh,notify]);
+
+  const restoreCloudPapers = useCallback(async () => {
+    if (!user) throw new Error("Sign in to the same PaperSpace account used for the upload.");
+    if (!db) throw new Error("Local paper storage is not ready yet.");
+    const session = await getDriveAccessToken();
+    const records = await listPaperRecords(user.uid);
+    if (!records.length) {
+      setDriveMessage("No cloud PDF records were found for this PaperSpace account.");
+      return;
+    }
+    let restored = 0;
+    for (const record of records) {
+      if (!record.driveFileId) continue;
+      const response = await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(record.driveFileId)+"?alt=media",{
+        headers:{Authorization:"Bearer "+session.accessToken}
+      });
+      if (!response.ok) {
+        if (response.status === 401) {
+          driveTokenRef.current = null;
+          setDriveAuthorized(false);
+          throw new Error("Drive permission expired. Reconnect and retry the restore.");
+        }
+        continue;
+      }
+      const blob = await response.blob();
+      const existing = await dbGet(db,record.id);
+      if (existing?.blob) {
+        await dbPut(db,{
+          ...existing,
+          driveFileId:record.driveFileId,
+          driveFileName:record.driveFileName,
+          provider:"google-drive-backed"
+        });
+      } else {
+        await dbPut(db,{
+          id:record.id,
+          name:record.title || record.driveFileName || "Untitled PDF",
+          blob,
+          added:Date.now(),
+          notes:existing?.notes || [],
+          highlights:existing?.highlights || [],
+          provider:"google-drive-backed",
+          driveFileId:record.driveFileId,
+          driveFileName:record.driveFileName
+        });
+      }
+      restored++;
+    }
+    await refresh();
+    setDriveMessage("Restored "+restored+" PDF(s) from your private Drive library. Existing local notes and highlights were preserved.");
+    notify("Cloud papers restored.");
+  },[user,db,getDriveAccessToken,refresh,notify]);
 
   const importDriveFiles = useCallback(async files => {
     const session = driveTokenRef.current;
