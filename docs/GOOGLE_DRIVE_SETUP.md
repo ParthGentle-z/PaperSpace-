@@ -1,50 +1,60 @@
-# Google Drive folder import setup
+# Google Drive file access setup
 
-PaperSpace can optionally import PDF files from one folder that you explicitly choose in Google Drive. The integration runs in the browser; PaperSpace does not send your Drive files to a PaperSpace server.
+PaperSpace can let you explicitly select PDF files from your Google Drive using Google Picker. The browser downloads selected PDFs into this browser's IndexedDB. This milestone does not upload local files to Drive or synchronize files across devices.
 
-## 1. Create a Google Cloud project
+## 1. Google Cloud configuration (manual; separate approval)
 
-1. Open the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create or select a project.
-3. Enable **Google Picker API** and **Google Drive API**.
-4. Configure the OAuth consent screen. For personal testing, set the app to **Testing** and add your Google account as a test user.
-5. Create an **API key** and restrict it to the Google Picker API. Add website restrictions for:
-   - `https://parthgentle-z.github.io/*`
-   - `http://localhost:5173/*` (local development only)
-6. Create an **OAuth Client ID** of type **Web application**. Add these authorised JavaScript origins:
-   - `https://parthgentle-z.github.io`
-   - `http://localhost:5173`
-7. Note the Google Cloud **Project number** (not the project name or project ID).
+Do not create or change Google Cloud resources as part of a repository code change. When separately approved:
 
-## 2. Add GitHub repository variables
+1. Open Google Cloud Console and use a project you control.
+2. Enable **Google Picker API** and **Google Drive API** only if available without enabling billing.
+3. Configure the OAuth consent screen. For personal testing, use Testing mode and add your Google account as a test user.
+4. Create an API key restricted to the Google Picker API and the required website origins.
+5. Create an OAuth Client ID of type Web application. Add the exact GitHub Pages origin and local development origin as authorised JavaScript origins.
+6. Note the numeric Google Cloud project number.
 
-Open **PaperSpace- → Settings → Secrets and variables → Actions → Variables** and create these repository variables:
+If the console requires a billing account or paid upgrade for any required API, stop. Do not link billing or add a payment method. Google API policies and quotas can change; this design must stop if a required operation is no longer available without billing.
 
-| Variable | Value |
+## 2. GitHub Actions variables
+
+Add these repository variables under Settings → Secrets and variables → Actions → Variables:
+
+| Variable | Purpose |
 |---|---|
-| `VITE_GOOGLE_API_KEY` | The restricted Google API key |
-| `VITE_GOOGLE_CLIENT_ID` | The Web OAuth client ID |
-| `VITE_GOOGLE_PROJECT_NUMBER` | The numeric Google Cloud project number |
+| `VITE_GOOGLE_API_KEY` | Restricted Picker API key |
+| `VITE_GOOGLE_CLIENT_ID` | Web OAuth client ID |
+| `VITE_GOOGLE_PROJECT_NUMBER` | Numeric Cloud project number |
 
-These are browser configuration identifiers, not passwords. Do not put an OAuth access token or client secret in Vite variables. Access tokens are obtained at runtime through Google Identity Services.
+These are browser configuration identifiers, not secrets. Never add OAuth client secrets, service-account keys or access tokens to Vite variables or the repository.
 
-After saving the variables, run the **Deploy PaperSpace to GitHub Pages** workflow again (or push a new commit), because Vite embeds `VITE_*` variables at build time.
+## 3. How PaperSpace requests access
 
-## 3. Connect from PaperSpace
+1. Open PaperSpace → Library → Connect Drive.
+2. Google Identity Services asks for the narrow `https://www.googleapis.com/auth/drive.file` scope.
+3. In Picker, select one or more PDF files explicitly. Folder-wide browsing/import is not used.
+4. PaperSpace downloads only the selected PDFs into the current browser's IndexedDB.
 
-1. Open PaperSpace and go to **Library**.
-2. Choose **Connect Drive**.
-3. Sign in with the Google account you added as a test user.
-4. Choose the research folder in the Google Picker.
-5. PaperSpace imports PDF files from that selected folder into this browser's IndexedDB.
+Selecting an individual file through Picker is the intended per-file authorization flow. The app does not request broad `drive` or `drive.readonly` access.
 
-The first integration uses the `drive.file` per-file scope. Google recommends this scope for files selected/shared with the app through Picker; it is narrower than access to the entire Drive. The app requests no write operations on your Drive files. The selected folder is stored as a preference, while imported PDFs are local browser copies. Re-import after adding new PDFs to the folder.
+## 4. Token lifecycle and disconnect
 
-Google OAuth testing mode, consent-screen settings and API-key restrictions are controlled by your Google Cloud project. If Google displays an app-not-verified or access-denied page, check that your own Google account is listed as a test user and that the authorised JavaScript origin matches the site exactly.
+- Access tokens are held in memory only; they are not written to localStorage, IndexedDB, Firestore or logs.
+- The app checks the token's expiry before downloading a selected PDF.
+- If the token expires or Google returns an authorization error, the operation stops and the user must reconnect.
+- Disconnect clears the in-memory token and attempts to revoke the current grant through Google Identity Services.
+- Disconnecting Drive does not delete PDFs already imported into local IndexedDB. Those local copies remain until the user removes them through the existing local library controls.
 
-## Privacy and limitations
+The selected file names/IDs are stored only as a local UI preference. They are not credentials and are not proof of an active authorization.
 
-- The PDF copies imported from Drive are stored only in the current browser's IndexedDB.
-- Drive access tokens are kept in memory and are not written to localStorage.
-- The initial folder import reads PDF files directly inside the selected folder; it does not recursively traverse subfolders.
-- This connector is optional. Local PDF upload works without Google credentials.
+## 5. Privacy and limitations
+
+- Only files explicitly selected in Picker are downloaded.
+- The original Drive files are read, not edited or deleted.
+- PDFs remain local to this browser in this milestone.
+- No background Drive scanning, recursive folder traversal, automatic upload or cross-device retrieval is implemented here.
+- Google OAuth testing-mode restrictions and token lifetimes are controlled by Google and may change.
+- Do not use real or sensitive research documents until you have reviewed the Google consent screen and confirmed the account and app configuration.
+
+## 6. Zero-spending rule
+
+PaperSpace must not add a payment method, link Cloud Billing or upgrade to a paid Google Cloud plan for this integration. If a quota or API policy blocks the free/no-billing path, stop and show an error rather than retrying through a paid service.
