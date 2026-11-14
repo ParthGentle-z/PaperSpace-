@@ -1203,6 +1203,11 @@ function App() {
     let uploaded = 0;
     const matchedLocalIds = new Set();
     for (const file of selected) {
+      if (Date.now() >= session.expiresAt - 60000) {
+        driveTokenRef.current = null;
+        setDriveAuthorized(false);
+        throw new Error("Google Drive access expired during upload. Completed uploads remain in Drive; local PDFs are safe. Reconnect before retrying remaining files.");
+      }
       const boundary = "paperspace_"+crypto.randomUUID().replace(/-/g,"");
       const metadata = {
         name:file.name,
@@ -1261,15 +1266,15 @@ function App() {
   const restoreCloudPapers = useCallback(async () => {
     if (!user) throw new Error("Sign in to the same PaperSpace account used for the upload.");
     if (!db) throw new Error("Local paper storage is not ready yet.");
-    const session = await getDriveAccessToken();
     const records = await listPaperRecords(user.uid);
-    if (!records.length) {
+    const cloudRecords = records.filter(record => record.driveFileId);
+    if (!cloudRecords.length) {
       setDriveMessage("No cloud PDF records were found for this PaperSpace account.");
       return;
     }
+    const session = await getDriveAccessToken();
     let restored = 0;
-    for (const record of records) {
-      if (!record.driveFileId) continue;
+    for (const record of cloudRecords) {
       const response = await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(record.driveFileId)+"?alt=media",{
         headers:{Authorization:"Bearer "+session.accessToken}
       });
