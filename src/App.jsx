@@ -128,6 +128,7 @@ function App() {
   const [editingAnnotationNoteId,setEditingAnnotationNoteId] = useState(null);
   const [annotationDraft,setAnnotationDraft] = useState("");
   const annotationEditorRef = useRef(null);
+  const annotationTextRangeRef = useRef(null);
   const [annotationSaveBusy,setAnnotationSaveBusy] = useState(false);
   const [annotationQuoteExpanded,setAnnotationQuoteExpanded] = useState(false);
   const [focusedAnnotationId,setFocusedAnnotationId] = useState("");
@@ -309,6 +310,39 @@ function App() {
     setAnnotationDraft(item?.text || "");
   },[]);
 
+  const rememberAnnotationSelection = useCallback(() => {
+    const editor = annotationEditorRef.current;
+    const currentSelection = window.getSelection();
+    if (!editor || !currentSelection || !currentSelection.rangeCount) return;
+    const range = currentSelection.getRangeAt(0);
+    if (!range.collapsed && editor.contains(range.commonAncestorContainer)) {
+      annotationTextRangeRef.current = range.cloneRange();
+    }
+  },[]);
+
+  const applyAnnotationHighlight = useCallback(color => {
+    const editor = annotationEditorRef.current;
+    const savedRange = annotationTextRangeRef.current;
+    if (!editor || !savedRange || savedRange.collapsed || !editor.contains(savedRange.commonAncestorContainer)) {
+      notify("Select the words you want to highlight first.");
+      return;
+    }
+    editor.focus();
+    const currentSelection = window.getSelection();
+    currentSelection.removeAllRanges();
+    currentSelection.addRange(savedRange);
+    const range = currentSelection.getRangeAt(0);
+    const mark = document.createElement("span");
+    mark.style.backgroundColor = color;
+    mark.appendChild(range.extractContents());
+    range.insertNode(mark);
+    const nextRange = document.createRange();
+    nextRange.selectNodeContents(mark);
+    currentSelection.removeAllRanges();
+    currentSelection.addRange(nextRange);
+    annotationTextRangeRef.current = nextRange.cloneRange();
+  },[notify]);
+
   const saveAnnotationNote = useCallback(async () => {
     const editorHtml = annotationEditorRef.current?.innerHTML || "";
     const safeHtml = sanitizeAnnotationHtml(editorHtml);
@@ -369,11 +403,22 @@ function App() {
   },[notify]);
 
   const cancelAnnotationEdit = useCallback(() => {
-    // Cancel only abandons the unsaved editor draft. Keep the same reader page
-    // and annotation panel open, without changing the saved note.
+    // Keep the current paper, PDF page, annotation and saved note unchanged.
+    // Only leave edit mode and discard the unsaved DOM draft.
+    const pageHost = document.querySelector(".pdf-page-host");
+    const readerScrollTop = pageHost?.scrollTop || 0;
+    const annotationPanel = document.querySelector(".annotation-read-popover");
+    const annotationScrollTop = annotationPanel?.scrollTop || 0;
     setEditingAnnotationNoteId(null);
     setAnnotationDraft("");
+    annotationTextRangeRef.current = null;
     if (annotationEditorRef.current) annotationEditorRef.current.innerHTML = "";
+    window.requestAnimationFrame(() => {
+      const nextPageHost = document.querySelector(".pdf-page-host");
+      if (nextPageHost) nextPageHost.scrollTop = readerScrollTop;
+      const nextAnnotationPanel = document.querySelector(".annotation-read-popover");
+      if (nextAnnotationPanel) nextAnnotationPanel.scrollTop = annotationScrollTop;
+    });
   },[]);
 
   const closeAnnotationPanel = useCallback(() => {
@@ -1224,23 +1269,21 @@ function App() {
                       </div>
                       {editingAnnotationNoteId === item.id
                         ? <div className="annotation-editor">
-                            <div className="annotation-format-toolbar" role="toolbar" aria-label="Note text formatting">
-                              <span>HIGHLIGHT</span>
-                              {[["#fff1a8","Yellow"],["#c9f2d5","Green"],["#cfe8ff","Blue"],["#f8d4e3","Pink"]].map(([color,label])=><button type="button" key={color} title={label+" highlight"} aria-label={label+" highlight"} style={{"--note-mark":color}} onMouseDown={event=>event.preventDefault()} onClick={()=>{annotationEditorRef.current?.focus();document.execCommand("hiliteColor",false,color);}}/>)}
-                              <button type="button" className="annotation-format-clear" onMouseDown={event=>event.preventDefault()} onClick={()=>{annotationEditorRef.current?.focus();document.execCommand("removeFormat",false,null);}}>Clear</button>
+                            <div ref={annotationEditorRef} className="annotation-rich-editor" contentEditable suppressContentEditableWarning onMouseUp={rememberAnnotationSelection} onKeyUp={rememberAnnotationSelection} onInput={rememberAnnotationSelection} role="textbox" aria-multiline="true" data-placeholder="Write your explanation, question, or connection…" dangerouslySetInnerHTML={{__html:item.html ? sanitizeAnnotationHtml(item.html) : escapeAnnotationHtml(item.text).replace(/\n/g,"<br>")}}/>
+                            <div className="annotation-highlight-tools" role="toolbar" aria-label="Highlight selected note text">
+                              <span>HIGHLIGHT SELECTED TEXT</span>
+                              {[["#fff1a8","Yellow"],["#c9f2d5","Green"],["#cfe8ff","Blue"],["#f8d4e3","Pink"]].map(([color,label])=><button type="button" key={color} title={label+" highlight"} aria-label={label+" highlight"} style={{"--note-mark":color}} onMouseDown={event=>event.preventDefault()} onClick={()=>applyAnnotationHighlight(color)}/>)}
                             </div>
-                            <div ref={annotationEditorRef} className="annotation-rich-editor" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" data-placeholder="Write your explanation, question, or connection…" dangerouslySetInnerHTML={{__html:item.html ? sanitizeAnnotationHtml(item.html) : escapeAnnotationHtml(item.text).replace(/\n/g,"<br>")}}/>
-                            <div className="annotation-editor-actions"><button type="button" className="button button-secondary button-small" onClick={cancelAnnotationEdit}>Cancel</button><button type="button" className="button button-primary button-small" disabled={annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save changes</>}</button></div>
+                            <div className="annotation-editor-actions"><button type="button" className="button button-secondary button-small" onClick={event=>{event.preventDefault();event.stopPropagation();cancelAnnotationEdit();}}>Cancel</button><button type="button" className="button button-primary button-small" disabled={annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save changes</>}</button></div>
                           </div>
                         : item.html ? <div className="annotation-note-rich-text" dangerouslySetInnerHTML={{__html:sanitizeAnnotationHtml(item.html)}}/> : <p>{item.text}</p>}
                     </article>) : editingAnnotationNoteId !== "__new__" && <div className="annotation-empty-note"><p>No note is linked to this highlight yet.</p><button onClick={()=>beginAnnotationEdit()}><Pencil size={13}/> Write a note for this passage</button></div>}
                     {editingAnnotationNoteId === "__new__" && <div className="annotation-editor">
-                    <div className="annotation-format-toolbar" role="toolbar" aria-label="Note text formatting">
-                      <span>HIGHLIGHT</span>
-                      {[["#fff1a8","Yellow"],["#c9f2d5","Green"],["#cfe8ff","Blue"],["#f8d4e3","Pink"]].map(([color,label])=><button type="button" key={color} title={label+" highlight"} aria-label={label+" highlight"} style={{"--note-mark":color}} onMouseDown={event=>event.preventDefault()} onClick={()=>{annotationEditorRef.current?.focus();document.execCommand("hiliteColor",false,color);}}/>)}
-                      <button type="button" className="annotation-format-clear" onMouseDown={event=>event.preventDefault()} onClick={()=>{annotationEditorRef.current?.focus();document.execCommand("removeFormat",false,null);}}>Clear</button>
-                    </div>
-                    <div ref={annotationEditorRef} className="annotation-rich-editor" contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" data-placeholder="Write your explanation, question, or connection…" dangerouslySetInnerHTML={{__html:escapeAnnotationHtml(annotationDraft).replace(/\n/g,"<br>")}}/>
+                    <div ref={annotationEditorRef} className="annotation-rich-editor" contentEditable suppressContentEditableWarning onMouseUp={rememberAnnotationSelection} onKeyUp={rememberAnnotationSelection} onInput={rememberAnnotationSelection} role="textbox" aria-multiline="true" data-placeholder="Write your explanation, question, or connection…" dangerouslySetInnerHTML={{__html:escapeAnnotationHtml(annotationDraft).replace(/\n/g,"<br>")}}/>
+                    <div className="annotation-highlight-tools" role="toolbar" aria-label="Highlight selected note text">
+                              <span>HIGHLIGHT SELECTED TEXT</span>
+                              {[["#fff1a8","Yellow"],["#c9f2d5","Green"],["#cfe8ff","Blue"],["#f8d4e3","Pink"]].map(([color,label])=><button type="button" key={color} title={label+" highlight"} aria-label={label+" highlight"} style={{"--note-mark":color}} onMouseDown={event=>event.preventDefault()} onClick={()=>applyAnnotationHighlight(color)}/>)}
+                            </div>
                     <div className="annotation-editor-actions"><button type="button" className="button button-secondary button-small" onClick={cancelAnnotationEdit}>Cancel</button><button type="button" className="button button-primary button-small" disabled={annotationSaveBusy} onClick={saveAnnotationNote}>{annotationSaveBusy ? "Saving…" : <><Save size={13}/> Save note</>}</button></div>
                   </div>}
                   </div>
