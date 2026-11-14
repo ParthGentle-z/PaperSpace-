@@ -44,3 +44,17 @@ Add the four `VITE_FIREBASE_*` values as GitHub Actions repository variables (no
 - If a quota is exhausted or a service becomes unavailable on Spark, stop the affected operation and explain the limit. Never fall back to a paid plan.
 - Google Drive storage remains within the user's own Google account quota.
 - Recheck current Firebase and Google API terms before enabling services, because free-tier policies can change.
+
+
+## Authentication interface (M1.2)
+
+The workspace header now includes an account control. Once a Firebase project has been configured, the interface supports:
+
+- Google sign-in through a popup.
+- Email/password registration and sign-in.
+- Password reset email.
+- Persistent browser sign-in session and sign-out.
+
+In Firebase Console, enable **Google** and **Email/Password** under Authentication → Sign-in method. Add the deployed GitHub Pages hostname and local development hostname under Authentication → Settings → Authorized domains. Do not enable phone authentication.
+
+Until all Firebase web configuration values are supplied, the account dialog explicitly reports that authentication is not configured and the existing local-first reader remains usable. The interface does not create a Firebase project or upload local papers.
