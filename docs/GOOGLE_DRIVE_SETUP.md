@@ -67,7 +67,7 @@ PaperSpace must not add a payment method, link Cloud Billing or upgrade to a pai
 1. Sign in to PaperSpace using the account that owns the Firestore record.
 2. In the library, choose **Upload local PDFs** and select the files.
 3. Google OAuth requests the narrow `drive.file` scope. The app creates a `PaperSpace` folder in the user's Drive if one is not already recorded in this browser.
-4. The selected PDF files are uploaded into that folder.
+4. The selected PDF files are uploaded into that folder using Drive's resumable upload protocol, which is suitable for larger research PDFs.
 5. PaperSpace saves the Drive file ID, file name and basic paper metadata under `users/{uid}/papers/{paperId}` in Firestore.
 6. The original local IndexedDB copy is preserved. No local record is removed after upload.
 
