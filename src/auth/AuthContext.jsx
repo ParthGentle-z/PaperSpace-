@@ -24,10 +24,12 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return undefined;
     }
+    let cancelled = false;
     let unsubscribe = () => {};
     setPersistence(auth, browserLocalPersistence)
       .catch(error => console.error("Firebase auth persistence setup failed:", error))
       .finally(() => {
+        if (cancelled) return;
         unsubscribe = onAuthStateChanged(auth, nextUser => {
           setUser(nextUser);
           setLoading(false);
@@ -37,7 +39,10 @@ export function AuthProvider({ children }) {
           setLoading(false);
         });
       });
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, []);
 
   const value = useMemo(() => ({
