@@ -333,19 +333,61 @@ function App() {
       notify("Select the words you want to highlight first.");
       return;
     }
-    editor.focus();
-    const currentSelection = window.getSelection();
-    currentSelection.removeAllRanges();
-    currentSelection.addRange(savedRange);
-    const range = currentSelection.getRangeAt(0);
-    const mark = document.createElement("span");
-    mark.style.backgroundColor = color;
-    mark.style.fontSize = "inherit";
-    mark.style.lineHeight = "inherit";
-    mark.appendChild(range.extractContents());
-    range.insertNode(mark);
+
+    // Wrap only the selected text-node fragments. Do not extract/reinsert a
+    // mixed HTML range: that can split paragraphs, disturb line breaks, and
+    // cause the browser to recalculate inline typography.
+    const range = savedRange.cloneRange();
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue?.length) continue;
+      try {
+        if (range.intersectsNode(node)) textNodes.push(node);
+      } catch {
+        // Ignore detached or otherwise non-intersecting nodes.
+      }
+    }
+
+    const wrappedTextNodes = [];
+    for (const textNode of textNodes) {
+      let start = textNode === range.startContainer ? range.startOffset : 0;
+      let end = textNode === range.endContainer ? range.endOffset : textNode.nodeValue.length;
+
+      // When a selection boundary is an element rather than a text node,
+      // use the boundary comparison to avoid wrapping text outside the range.
+      if (range.startContainer !== textNode && range.comparePoint(textNode, 0) === -1) continue;
+      if (range.endContainer !== textNode && range.comparePoint(textNode, textNode.nodeValue.length) === 1) continue;
+
+      start = Math.max(0, Math.min(start, textNode.nodeValue.length));
+      end = Math.max(0, Math.min(end, textNode.nodeValue.length));
+      if (end <= start) continue;
+
+      let selectedNode = textNode;
+      if (end < selectedNode.nodeValue.length) selectedNode.splitText(end);
+      if (start > 0) selectedNode = selectedNode.splitText(start);
+
+      const mark = document.createElement("span");
+      mark.style.backgroundColor = color;
+      mark.setAttribute("data-note-highlight", "true");
+      selectedNode.parentNode.insertBefore(mark, selectedNode);
+      mark.appendChild(selectedNode);
+      wrappedTextNodes.push(selectedNode);
+    }
+
+    if (!wrappedTextNodes.length) {
+      notify("Select the words you want to highlight first.");
+      return;
+    }
+
+    // Keep the highlighted text selected so another colour can be chosen
+    // immediately, while preserving all original whitespace and <br> nodes.
     const nextRange = document.createRange();
-    nextRange.selectNodeContents(mark);
+    nextRange.setStart(wrappedTextNodes[0], 0);
+    const lastNode = wrappedTextNodes[wrappedTextNodes.length - 1];
+    nextRange.setEnd(lastNode, lastNode.nodeValue.length);
+    const currentSelection = window.getSelection();
     currentSelection.removeAllRanges();
     currentSelection.addRange(nextRange);
     annotationTextRangeRef.current = nextRange.cloneRange();
