@@ -52,7 +52,7 @@ export default function AccountControl() {
           <p className="account-eyebrow">PAPERSPACE ACCOUNT</p>
           <h2 id="account-title">You’re signed in</h2>
           <p className="account-subtitle">{user.displayName || user.email}</p>
-          <div className="account-notice">Your papers and annotations remain stored locally in this milestone. Cloud sync will be introduced separately.</div>
+          <div className="account-notice">Your PDFs can be uploaded to your own Google Drive and restored on another device. Notes, highlights and reading positions are still stored locally in this milestone.</div>
           <button className="button button-secondary button-full" disabled={busy} onClick={() => run(signOut)}><LogOut size={16}/>Sign out</button>
         </> : <>
           <div className="account-avatar"><UserRound size={23}/></div>
