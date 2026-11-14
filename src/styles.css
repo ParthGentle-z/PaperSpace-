@@ -1230,3 +1230,26 @@
   vertical-align:baseline !important;
   color:inherit !important;
 }
+
+
+/* Final override: the annotation metadata styles must never leak into inline
+   highlighted note text. Only the background colour differs from its context. */
+.annotation-read-note .annotation-rich-editor span[style*="background-color"],
+.annotation-read-note .annotation-note-rich-text span[style*="background-color"],
+.annotation-rich-editor span[data-note-highlight],
+.annotation-note-rich-text span[data-note-highlight]{
+  display:inline !important;
+  box-sizing:content-box !important;
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  font:inherit !important;
+  letter-spacing:inherit !important;
+  text-transform:inherit !important;
+  text-decoration:inherit !important;
+  line-height:inherit !important;
+  color:inherit !important;
+  vertical-align:baseline !important;
+  white-space:inherit !important;
+}
