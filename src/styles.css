@@ -555,7 +555,7 @@
 .annotation-note-meta{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .annotation-edit-button{flex:none}
 .annotation-editor{margin-top:9px;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--surface2)}
-.annotation-editor textarea{display:block;width:100%;min-height:138px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font:14px/1.75 inherit;outline:none}
+.annotation-editor textarea{display:block;width:100%;min-height:138px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-family:inherit;font-size:14px;line-height:1.75;outline:none}
 .annotation-editor textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
 .annotation-editor-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
 .annotation-empty-note{padding:13px;border:1px dashed var(--line);border-radius:9px;background:var(--surface2)}
@@ -1134,7 +1134,7 @@
 .annotation-format-toolbar button:not(.annotation-format-clear){width:22px;height:22px;padding:0;border:2px solid var(--surface);outline:1px solid var(--line);border-radius:50%;background:var(--note-mark);cursor:pointer}
 .annotation-format-toolbar button:not(.annotation-format-clear):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .annotation-format-toolbar .annotation-format-clear{margin-left:auto;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--muted);font-size:11px;cursor:pointer}
-.annotation-rich-editor{display:block;width:100%;min-height:clamp(180px,30vh,420px);max-height:58vh;overflow:auto;resize:vertical;padding:13px 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--text);font:14px/1.8 inherit;white-space:pre-wrap;overflow-wrap:anywhere;outline:none}
+.annotation-rich-editor{display:block;width:100%;min-height:clamp(180px,30vh,420px);max-height:58vh;overflow:auto;resize:vertical;padding:13px 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--text);font-family:inherit;font-size:14px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere;outline:none}
 .annotation-rich-editor:empty:before{content:attr(data-placeholder);color:var(--muted);pointer-events:none}
 .annotation-rich-editor:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
 .annotation-rich-editor mark,.annotation-note-rich-text mark{padding:0 .08em;border-radius:3px;color:inherit}
@@ -1149,3 +1149,63 @@
 .annotation-highlight-tools button{width:24px;height:24px;flex:0 0 24px;padding:0;border:2px solid var(--surface);outline:1px solid var(--line);border-radius:50%;background:var(--note-mark);cursor:pointer}
 .annotation-highlight-tools button:hover{transform:scale(1.08)}
 .annotation-highlight-tools button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+
+/* Annotation editing: use the full viewport and keep the editor controls below the text. */
+@media (min-width: 901px){
+  body:has(.reader-layout.annotation-edit-focus) .reader-mode .topbar{display:none !important}
+  .reader-content:has(.reader-layout.annotation-edit-focus){
+    height:100dvh !important;
+    padding-top:14px !important;
+  }
+  .reader-content:has(.reader-layout.annotation-edit-focus) .reader-headline{display:none !important}
+  .reader-layout.annotation-edit-focus{
+    height:calc(100dvh - 30px) !important;
+    min-height:520px !important;
+  }
+}
+.reader-layout.annotation-edit-focus .annotation-editor{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:10px !important;
+}
+.reader-layout.annotation-edit-focus .annotation-rich-editor{
+  order:1 !important;
+  min-height:clamp(340px,56vh,720px) !important;
+  max-height:none !important;
+  resize:vertical;
+  font-family:inherit !important;
+  font-size:15px !important;
+  line-height:1.8 !important;
+}
+.reader-layout.annotation-edit-focus .annotation-highlight-tools{
+  order:2 !important;
+  margin:0 !important;
+  padding:10px 12px !important;
+  background:var(--surface2) !important;
+}
+.reader-layout.annotation-edit-focus .annotation-editor-actions{
+  order:3 !important;
+  position:sticky !important;
+  bottom:0 !important;
+  z-index:12 !important;
+  padding:10px 0 2px !important;
+  margin:0 !important;
+  background:var(--surface) !important;
+  border-top:1px solid var(--line);
+}
+.reader-layout.annotation-edit-focus .annotation-note-rich-text,
+.reader-layout.annotation-edit-focus .annotation-rich-editor,
+.reader-layout.annotation-edit-focus .annotation-rich-editor *{
+  font-family:inherit !important;
+  font-size:inherit;
+  line-height:inherit;
+}
+.reader-layout.annotation-edit-focus .annotation-note-meta .annotation-note-actions{display:none !important}
+.annotation-rich-editor span[style*="background-color"]{
+  font:inherit !important;
+  font-size:inherit !important;
+  line-height:inherit !important;
+  color:inherit !important;
+  vertical-align:baseline;
+}
