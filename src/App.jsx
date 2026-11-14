@@ -1201,6 +1201,7 @@ function App() {
     const token = session.accessToken;
     const folderId = await getOrCreateDriveFolder(token);
     let uploaded = 0;
+    const matchedLocalIds = new Set();
     for (const file of selected) {
       const boundary = "paperspace_"+crypto.randomUUID().replace(/-/g,"");
       const metadata = {
@@ -1229,8 +1230,9 @@ function App() {
         throw new Error("Drive upload failed for "+file.name+". Your local PDF remains safe. Check Drive quota and free API availability.");
       }
       const uploadedFile = await response.json();
-      const local = papers.find(item => item.name === file.name && item.blob?.size === file.size);
+      const local = papers.find(item => !matchedLocalIds.has(item.id) && item.name === file.name && item.blob?.size === file.size && (!item.blob?.lastModified || item.blob.lastModified === file.lastModified));
       const localId = local?.id || crypto.randomUUID();
+      if (local) matchedLocalIds.add(local.id);
       const existing = local ? local : {
         id:localId,name:file.name,blob:file,added:Date.now(),notes:[],highlights:[],provider:"local"
       };
