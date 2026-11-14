@@ -162,30 +162,47 @@ function App() {
   const pendingAnnotationRef = useRef(null);
   const highlightClickTimerRef = useRef(null);
   const topbarTimerRef = useRef(null);
+  const topbarPointerInsideRef = useRef(false);
 
-  // The workspace bar appears for three seconds on reader entry. Moving
-  // the pointer to the very top edge reveals it again; it then auto-hides.
-  // PDF loads, note edits and page changes do not restart this behaviour.
+  // Stable hover-to-reveal header: entering the top trigger zone cancels
+  // the pending hide timer. Leaving it starts one 3-second grace period.
+  // Pointer movement inside the zone never restarts the timer.
   useEffect(() => {
     if (view !== "reader") {
+      window.clearTimeout(topbarTimerRef.current);
+      topbarPointerInsideRef.current = false;
       setTopbarVisible(true);
       return;
     }
     const scheduleHide = () => {
       window.clearTimeout(topbarTimerRef.current);
-      topbarTimerRef.current = window.setTimeout(() => setTopbarVisible(false), 3000);
+      topbarTimerRef.current = window.setTimeout(() => {
+        if (!topbarPointerInsideRef.current) setTopbarVisible(false);
+      }, 3000);
     };
+    topbarPointerInsideRef.current = false;
     setTopbarVisible(true);
     scheduleHide();
     const onPointerMove = event => {
-      if (event.clientY > 96) return;
-      setTopbarVisible(true);
-      scheduleHide();
+      const inside = event.clientY <= 96;
+      if (inside) {
+        if (!topbarPointerInsideRef.current) {
+          topbarPointerInsideRef.current = true;
+          window.clearTimeout(topbarTimerRef.current);
+        }
+        setTopbarVisible(true);
+        return;
+      }
+      if (topbarPointerInsideRef.current) {
+        topbarPointerInsideRef.current = false;
+        scheduleHide();
+      }
     };
     window.addEventListener("pointermove", onPointerMove, {passive:true});
     return () => {
       window.removeEventListener("pointermove", onPointerMove);
       window.clearTimeout(topbarTimerRef.current);
+      topbarPointerInsideRef.current = false;
     };
   }, [view]);
 
@@ -1206,7 +1223,7 @@ function App() {
       {mobileSidebar && sidebarVisible && <button className="sidebar-scrim" onClick={() => setMobileSidebar(false)} aria-label="Close navigation"/>}
 
       <main className="main-area">
-        {topbarVisible ? <header className="topbar">
+        <header className={"topbar "+(!topbarVisible && view === "reader" ? "topbar-auto-hidden" : "")}>
           <div className="topbar-left">
             <button className="icon-btn sidebar-toggle" title={sidebarVisible ? "Hide menu and compact header" : "Show menu"}
               onClick={() => { if (window.matchMedia("(max-width: 820px)").matches) { if (!sidebarVisible) { setSidebarVisible(true); setMobileSidebar(true); } else setMobileSidebar(v=>!v); } else { const next=!sidebarVisible; setSidebarVisible(next); setTopbarVisible(next); } }}>
@@ -1219,7 +1236,7 @@ function App() {
             {view !== "reader" && <button className="button button-primary" onClick={() => document.getElementById("paper-upload")?.click()}><Plus size={16}/><span>Add paper</span></button>}
             {view === "reader" && <button className="icon-btn topbar-collapse" title="Hide top bar" aria-label="Hide top bar" onClick={() => setTopbarVisible(false)}><ChevronUp size={17}/></button>}
           </div>
-        </header> : null}
+        </header>
         <input id="paper-upload" hidden type="file" accept="application/pdf,.pdf" multiple onChange={e => { addLocalFiles(e.target.files); e.target.value=""; }}/>
 
         {view === "library" && <div className="content library-content">
