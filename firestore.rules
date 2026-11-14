@@ -1,0 +1,118 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedInAs(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function hasOnlyKeys(data, keys) {
+      return data.keys().hasOnly(keys);
+    }
+
+    function validUserProfile(data) {
+      return hasOnlyKeys(data, ['displayName', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['displayName', 'email', 'createdAt', 'updatedAt'])
+        && data.displayName is string
+        && data.email is string
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validPaper(data) {
+      return hasOnlyKeys(data, [
+          'title', 'authors', 'publication', 'driveFileId', 'driveFileName',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'title', 'authors', 'publication', 'driveFileId', 'driveFileName',
+          'createdAt', 'updatedAt'
+        ])
+        && data.title is string
+        && data.authors is string
+        && data.publication is string
+        && data.driveFileId is string
+        && data.driveFileName is string
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validNote(data) {
+      return hasOnlyKeys(data, ['content', 'anchor', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['content', 'anchor', 'createdAt', 'updatedAt'])
+        && data.content is string
+        && data.anchor is map
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validAnnotation(data) {
+      return hasOnlyKeys(data, [
+          'type', 'page', 'selectedText', 'position', 'color', 'createdAt'
+        ])
+        && data.keys().hasAll([
+          'type', 'page', 'selectedText', 'position', 'color', 'createdAt'
+        ])
+        && data.type in ['highlight', 'bookmark']
+        && data.page is int
+        && data.page >= 1
+        && data.selectedText is string
+        && data.position is map
+        && data.color is string
+        && data.createdAt is timestamp;
+    }
+
+    function validProject(data) {
+      return hasOnlyKeys(data, ['title', 'description', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['title', 'description', 'createdAt', 'updatedAt'])
+        && data.title is string
+        && data.description is string
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow read: if signedInAs(userId);
+      allow create: if signedInAs(userId) && validUserProfile(request.resource.data);
+      allow update: if signedInAs(userId)
+        && validUserProfile(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+
+      match /papers/{paperId} {
+        allow read: if signedInAs(userId);
+        allow create: if signedInAs(userId) && validPaper(request.resource.data);
+        allow update: if signedInAs(userId)
+          && validPaper(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if signedInAs(userId);
+
+        match /notes/{noteId} {
+          allow read: if signedInAs(userId);
+          allow create: if signedInAs(userId) && validNote(request.resource.data);
+          allow update: if signedInAs(userId)
+            && validNote(request.resource.data)
+            && request.resource.data.createdAt == resource.data.createdAt;
+          allow delete: if signedInAs(userId);
+        }
+
+        match /annotations/{annotationId} {
+          allow read: if signedInAs(userId);
+          allow create: if signedInAs(userId) && validAnnotation(request.resource.data);
+          allow update: if signedInAs(userId) && validAnnotation(request.resource.data);
+          allow delete: if signedInAs(userId);
+        }
+      }
+
+      match /projects/{projectId} {
+        allow read: if signedInAs(userId);
+        allow create: if signedInAs(userId) && validProject(request.resource.data);
+        allow update: if signedInAs(userId)
+          && validProject(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if signedInAs(userId);
+      }
+    }
+
+    // All paths not explicitly allowed above are denied by default.
+  }
+}
