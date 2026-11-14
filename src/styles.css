@@ -1637,3 +1637,66 @@ body:has(.app-shell.reader-mode) #root {
     grid-template-rows:minmax(0,1fr) minmax(170px,34%) !important;
   }
 }
+
+
+/* READER HEADER MERGE: keep breadcrumb, paper title and reader actions on one bar */
+.reader-topbar-meta {
+  display:flex;
+  align-items:baseline;
+  gap:12px;
+  min-width:0;
+  margin-left:clamp(10px,1.5vw,24px);
+  padding-left:clamp(10px,1.5vw,24px);
+  border-left:1px solid var(--line);
+}
+.reader-topbar-meta .eyebrow {
+  flex:none;
+  white-space:nowrap;
+  font-size:9px;
+  letter-spacing:1.15px;
+  color:var(--accent);
+  font-weight:800;
+}
+.reader-topbar-meta .reader-document-title {
+  display:block;
+  max-width:min(42vw,680px);
+}
+.reader-mode .topbar {
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:14px !important;
+  height:76px !important;
+  min-height:76px !important;
+  padding:0 clamp(16px,2.4vw,38px) !important;
+}
+.reader-mode .topbar-left {
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  overflow:hidden !important;
+}
+.reader-mode .top-actions {
+  flex:0 0 auto !important;
+  white-space:nowrap !important;
+}
+.reader-mode .reader-headline { display:none !important; }
+.reader-mode .reader-content {
+  padding-top:90px !important;
+}
+.reader-mode.reader-topbar-collapsed .reader-content,
+.reader-mode.annotation-focus-mode .reader-content {
+  padding-top:12px !important;
+}
+@media (max-width:1100px) {
+  .reader-topbar-meta .eyebrow { display:none; }
+  .reader-topbar-meta { margin-left:10px; padding-left:10px; }
+  .reader-topbar-meta .reader-document-title { max-width:34vw; }
+}
+@media (max-width:820px) {
+  .reader-mode .topbar { height:62px !important; min-height:62px !important; padding:0 10px !important; }
+  .reader-mode .reader-content { padding-top:74px !important; }
+  .reader-mode.reader-topbar-collapsed .reader-content,
+  .reader-mode.annotation-focus-mode .reader-content { padding-top:10px !important; }
+  .reader-topbar-meta .reader-document-title { max-width:32vw; font-size:12px; }
+  .reader-open-paper, .reader-page-status { display:none !important; }
+}
