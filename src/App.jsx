@@ -162,6 +162,15 @@ function App() {
   const pendingAnnotationRef = useRef(null);
   const highlightClickTimerRef = useRef(null);
 
+  // In the reader, automatically collapse the workspace breadcrumb after the
+  // page has opened. Scrolling the PDF also collapses it immediately.
+  useEffect(() => {
+    if (view !== "reader") return;
+    setTopbarVisible(true);
+    const timer = window.setTimeout(() => setTopbarVisible(false),3000);
+    return () => window.clearTimeout(timer);
+  },[view,activeId,pdf]);
+
   const active = papers.find(p => p.id === activeId) || null;
   activeHighlightsRef.current = active?.highlights || [];
   const notes = useMemo(() => papers.flatMap(p => (p.notes || []).map(n => ({...n,paperName:p.name,paperId:p.id}))),[papers]);
@@ -1010,6 +1019,7 @@ function App() {
     buildDocument();
 
     const onScroll=()=>{
+      if (root.scrollTop > 4) setTopbarVisible(false);
       const sheets=Array.from(root.querySelectorAll(".pdf-sheet"));
       if (!sheets.length) return;
       const line=root.getBoundingClientRect().top+36;
