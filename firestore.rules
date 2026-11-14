@@ -12,8 +12,8 @@ service cloud.firestore {
     function validUserProfile(data) {
       return hasOnlyKeys(data, ['displayName', 'email', 'createdAt', 'updatedAt'])
         && data.keys().hasAll(['displayName', 'email', 'createdAt', 'updatedAt'])
-        && data.displayName is string
-        && data.email is string
+        && data.displayName is string && data.displayName.size() <= 120
+        && data.email is string && data.email.size() <= 254
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -27,11 +27,11 @@ service cloud.firestore {
           'title', 'authors', 'publication', 'driveFileId', 'driveFileName',
           'createdAt', 'updatedAt'
         ])
-        && data.title is string
-        && data.authors is string
-        && data.publication is string
-        && data.driveFileId is string
-        && data.driveFileName is string
+        && data.title is string && data.title.size() <= 1000
+        && data.authors is string && data.authors.size() <= 4000
+        && data.publication is string && data.publication.size() <= 1000
+        && data.driveFileId is string && data.driveFileId.size() <= 512
+        && data.driveFileName is string && data.driveFileName.size() <= 1000
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -39,8 +39,8 @@ service cloud.firestore {
     function validNote(data) {
       return hasOnlyKeys(data, ['content', 'anchor', 'createdAt', 'updatedAt'])
         && data.keys().hasAll(['content', 'anchor', 'createdAt', 'updatedAt'])
-        && data.content is string
-        && data.anchor is map
+        && data.content is string && data.content.size() <= 20000
+        && (data.anchor == null || data.anchor is map)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -55,17 +55,17 @@ service cloud.firestore {
         && data.type in ['highlight', 'bookmark']
         && data.page is int
         && data.page >= 1
-        && data.selectedText is string
+        && data.selectedText is string && data.selectedText.size() <= 10000
         && data.position is map
-        && data.color is string
+        && data.color is string && data.color.size() <= 32
         && data.createdAt is timestamp;
     }
 
     function validProject(data) {
       return hasOnlyKeys(data, ['title', 'description', 'createdAt', 'updatedAt'])
         && data.keys().hasAll(['title', 'description', 'createdAt', 'updatedAt'])
-        && data.title is string
-        && data.description is string
+        && data.title is string && data.title.size() <= 300
+        && data.description is string && data.description.size() <= 5000
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
