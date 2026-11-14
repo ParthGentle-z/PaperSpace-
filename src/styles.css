@@ -1323,3 +1323,32 @@
     min-height:0 !important;
   }
 }
+
+
+/* Smooth reader header: keep it mounted so it can animate instead of
+   disappearing/reappearing abruptly. It overlays the reader, not its layout. */
+.reader-mode .main-area{position:relative}
+.reader-mode .topbar{
+  position:absolute !important;
+  top:0;left:0;right:0;
+  height:76px;
+  z-index:40;
+  transform:translateY(0);
+  opacity:1;
+  visibility:visible;
+  transition:transform .28s cubic-bezier(.2,.75,.25,1),opacity .22s ease;
+  will-change:transform,opacity;
+}
+.reader-mode .topbar.topbar-auto-hidden{
+  transform:translateY(-105%);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+.reader-mode .reader-content{
+  height:calc(100dvh - 76px) !important;
+  transition:height .28s cubic-bezier(.2,.75,.25,1),padding .28s ease;
+}
+.reader-topbar-collapsed .reader-content{
+  height:100dvh !important;
+}
